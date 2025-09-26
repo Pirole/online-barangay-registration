@@ -1,0 +1,10 @@
+# .gitignore
+node_modules/
+dist/
+.env
+.env.local
+.env.production
+uploads/
+*.log
+.DS_Store
+coverage/
