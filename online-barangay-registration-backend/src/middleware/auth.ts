@@ -1,3 +1,4 @@
+// src/middleware/auth.ts - Authentication and RBAC middleware
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { UserRole, JwtPayload } from '../types/auth';
@@ -24,7 +25,17 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
       return;
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      logger.error('JWT_SECRET is not configured');
+      res.status(500).json({
+        success: false,
+        error: 'Server configuration error',
+      });
+      return;
+    }
+
+    const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
     req.user = decoded;
     next();
   } catch (error) {

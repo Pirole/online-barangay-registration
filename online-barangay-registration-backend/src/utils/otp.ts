@@ -1,3 +1,4 @@
+// src/utils/otp.ts - OTP generation and validation utilities
 import crypto from 'crypto';
 
 export const generateOTP = (): string => {

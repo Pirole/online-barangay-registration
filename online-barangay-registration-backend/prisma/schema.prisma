@@ -1,0 +1,193 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum UserRole {
+  SUPER_ADMIN
+  EVENT_MANAGER
+  STAFF
+  RESIDENT
+  GUEST
+}
+
+enum RegistrantStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FLAGGED_AGE
+  FLAGGED_OTHER
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  SCAN
+  LOGIN
+  EXPORT
+}
+
+// Core Models
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  phone        String?
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(RESIDENT)
+  name         String
+  barangay     String?
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  managedEvents Event[]      @relation("EventManager")
+  registrants   Registrant[] @relation("UserRegistrants")
+  auditLogs     AuditLog[]   @relation("AuditActor")
+  scannedBy     AttendanceLog[] @relation("ScannedBy")
+
+  @@map("users")
+}
+
+model Event {
+  id              String    @id @default(uuid())
+  title           String
+  description     String?
+  startDate       DateTime  @map("start_date")
+  endDate         DateTime  @map("end_date")
+  location        String
+  capacity        Int?
+  ageMin          Int?      @map("age_min")
+  ageMax          Int?      @map("age_max")
+  customFields    Json?     @map("custom_fields") // Array of field definitions
+  allowAutoCheckin Boolean  @default(false) @map("allow_auto_checkin")
+  isActive        Boolean   @default(true) @map("is_active")
+  retentionDays   Int       @default(90) @map("retention_days")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  managerId    String      @map("manager_id")
+  manager      User        @relation("EventManager", fields: [managerId], references: [id])
+  registrants  Registrant[]
+  attendanceLogs AttendanceLog[]
+
+  @@map("events")
+}
+
+model Registrant {
+  id                 String            @id @default(uuid())
+  eventId            String            @map("event_id")
+  userId             String?           @map("user_id") // Nullable for guest registrations
+  name               String
+  address            String
+  age                Int
+  phone              String
+  barangay           String
+  photoPath          String?           @map("photo_path") // Path to stored photo
+  customFieldValues  Json?             @map("custom_field_values") // Key-value pairs
+  status             RegistrantStatus  @default(PENDING)
+  qrValue            String?           @unique @map("qr_value") // JWT or encrypted token
+  qrImagePath        String?           @map("qr_image_path") // Path to QR image
+  rejectionReason    String?           @map("rejection_reason")
+  flagReason         String?           @map("flag_reason")
+  approvedAt         DateTime?         @map("approved_at")
+  approvedBy         String?           @map("approved_by") // User ID of approver
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  event         Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user          User?           @relation("UserRegistrants", fields: [userId], references: [id])
+  otpCodes      OtpCode[]
+  attendanceLogs AttendanceLog[]
+
+  @@map("registrants")
+}
+
+model OtpCode {
+  id            String    @id @default(uuid())
+  registrantId  String    @map("registrant_id")
+  codeHash      String    @map("code_hash") // Hashed OTP code
+  expiresAt     DateTime  @map("expires_at")
+  attempts      Int       @default(0)
+  isUsed        Boolean   @default(false) @map("is_used")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  registrant    Registrant @relation(fields: [registrantId], references: [id], onDelete: Cascade)
+
+  @@map("otp_codes")
+}
+
+model AttendanceLog {
+  id           String   @id @default(uuid())
+  registrantId String   @map("registrant_id")
+  eventId      String   @map("event_id")
+  scannedById  String   @map("scanned_by_id") // User who scanned
+  checkinTime  DateTime @map("checkin_time")
+  metadata     Json?    // Additional scan info (location, device, etc.)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  registrant   Registrant @relation(fields: [registrantId], references: [id], onDelete: Cascade)
+  event        Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  scannedBy    User       @relation("ScannedBy", fields: [scannedById], references: [id])
+
+  @@map("attendance_logs")
+}
+
+model AuditLog {
+  id         String      @id @default(uuid())
+  actorId    String?     @map("actor_id") // Nullable for system actions
+  action     AuditAction
+  targetType String      @map("target_type") // e.g., 'registrant', 'event', 'user'
+  targetId   String      @map("target_id")
+  metadata   Json?       // Additional context data
+  ipAddress  String?     @map("ip_address")
+  userAgent  String?     @map("user_agent")
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  actor      User?       @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// Additional utility models
+model TempPhoto {
+  id        String   @id @default(uuid())
+  filename  String
+  filepath  String
+  mimetype  String
+  size      Int
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at") // Auto-cleanup after 1 hour
+
+  @@map("temp_photos")
+}
+
+model SystemSetting {
+  id    String @id @default(uuid())
+  key   String @unique
+  value String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}
+
+// Indexes for performance
+// These are automatically created by Prisma for @unique and foreign keys
+// Additional indexes can be added as needed:
+// @@index([field_name])

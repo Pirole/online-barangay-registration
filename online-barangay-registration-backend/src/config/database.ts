@@ -1,43 +1,90 @@
-import { Pool } from 'pg';
+import { Pool, QueryResult } from 'pg';
 import { logger } from '../utils/logger';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 20, // maximum number of connections in the pool
-  idleTimeoutMillis: 30000, // how long a client is allowed to remain idle
-  connectionTimeoutMillis: 2000, // how long to wait when connecting a new client
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
 });
 
-// Test database connection
+// Enhanced connection monitoring
 pool.on('connect', () => {
-  logger.info('Connected to PostgreSQL database');
+  logger.info('New database connection established');
 });
 
-pool.on('error', (err) => {
-  logger.error('Unexpected error on idle client', err);
+pool.on('error', (err: Error) => {
+  logger.error('Database connection error:', err);
   process.exit(-1);
 });
 
-export const query = (text: string, params?: any[]): Promise<any> => {
+// Simple query wrapper for logging (development only)
+export const query = async (text: string, params?: any[]): Promise<QueryResult> => {
   const start = Date.now();
-  return new Promise((resolve, reject) => {
-    pool.query(text, params, (err, res) => {
-      const duration = Date.now() - start;
-      logger.debug('Executed query', { text, duration, rows: res?.rowCount });
-      
-      if (err) {
-        logger.error('Query error', { text, error: err.message });
-        reject(err);
-      } else {
-        resolve(res);
-      }
+  
+  if (process.env.NODE_ENV === 'development') {
+    logger.debug('Executing query:', {
+      query: text,
+      params: params || []
     });
-  });
+  }
+  
+  try {
+    const result = await pool.query(text, params);
+    
+    if (process.env.NODE_ENV === 'development') {
+      const duration = Date.now() - start;
+      logger.debug('Query completed:', {
+        duration: `${duration}ms`,
+        rows: result.rowCount || 0
+      });
+    }
+    
+    return result;
+  } catch (error) {
+    if (process.env.NODE_ENV === 'development') {
+      const duration = Date.now() - start;
+      logger.error('Query error:', {
+        duration: `${duration}ms`,
+        error: (error as Error).message,
+        query: text,
+        params: params || []
+      });
+    }
+    throw error;
+  }
 };
 
+// Test database connection
+export const testConnection = async (): Promise<void> => {
+  try {
+    const client = await pool.connect();
+    await client.query('SELECT NOW()');
+    client.release();
+    logger.info('Database connection test successful');
+  } catch (error) {
+    logger.error('Database connection test failed:', error);
+    throw error;
+  }
+};
+
+// Get a client from the pool
 export const getClient = () => {
   return pool.connect();
 };
 
-export { pool };
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  logger.info('Closing database connection pool...');
+  await pool.end();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  logger.info('Closing database connection pool...');
+  await pool.end();
+  process.exit(0);
+});
+
+export default pool;
