@@ -7,10 +7,10 @@ const phoneRegex = /^(\+63|0)9\d{9}$/;
 export const RegisterSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   address: z.string().min(5, "Address must be at least 5 characters"),
-  age: z.coerce.number().int().min(0, "Age must be a positive number"),
+  age: z.number().int().min(0, "Age must be a positive number"),
   phone: z.string().regex(phoneRegex, "Invalid Philippine phone number format"),
   barangay: z.string().min(2, "Barangay must be at least 2 characters"),
-  customFields: z.record(z.any()).optional(),
+  customFields: z.record(z.string(), z.any()).optional(),
   photoTempId: z.string().uuid("Invalid photo temp ID format"),
 });
 
@@ -23,9 +23,7 @@ export const CreateUserSchema = z.object({
   email: z.string().email("Invalid email format"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   name: z.string().min(2, "Name must be at least 2 characters"),
-  role: z.enum(['super_admin', 'event_manager', 'staff'], {
-    errorMap: () => ({ message: "Invalid role" })
-  }),
+  role: z.enum(['super_admin', 'event_manager', 'staff']),
   phone: z.string().regex(phoneRegex, "Invalid Philippine phone number format").optional(),
   barangay: z.string().min(2, "Barangay must be at least 2 characters").optional(),
 });
@@ -33,9 +31,7 @@ export const CreateUserSchema = z.object({
 export const UpdateUserSchema = z.object({
   email: z.string().email("Invalid email format").optional(),
   name: z.string().min(2, "Name must be at least 2 characters").optional(),
-  role: z.enum(['super_admin', 'event_manager', 'staff'], {
-    errorMap: () => ({ message: "Invalid role" })
-  }).optional(),
+  role: z.enum(['super_admin', 'event_manager', 'staff']).optional(),
   phone: z.string().regex(phoneRegex, "Invalid Philippine phone number format").optional(),
   barangay: z.string().min(2, "Barangay must be at least 2 characters").optional(),
 });
@@ -46,15 +42,13 @@ export const CreateEventSchema = z.object({
   startDate: z.string().datetime("Invalid start date format"),
   endDate: z.string().datetime("Invalid end date format"),
   location: z.string().min(3, "Location must be at least 3 characters"),
-  capacity: z.coerce.number().int().min(1, "Capacity must be at least 1"),
-  ageMin: z.coerce.number().int().min(0, "Minimum age must be 0 or greater").optional(),
-  ageMax: z.coerce.number().int().max(120, "Maximum age must be 120 or less").optional(),
+  capacity: z.number().int().min(1, "Capacity must be at least 1"),
+  ageMin: z.number().int().min(0, "Minimum age must be 0 or greater").optional(),
+  ageMax: z.number().int().max(120, "Maximum age must be 120 or less").optional(),
   customFields: z.array(z.object({
     key: z.string().min(1, "Field key is required"),
     label: z.string().min(1, "Field label is required"),
-    type: z.enum(['text', 'number', 'email', 'select', 'textarea'], {
-      errorMap: () => ({ message: "Invalid field type" })
-    }),
+    type: z.enum(['text', 'number', 'email', 'select', 'textarea']),
     required: z.boolean(),
     validation: z.string().optional(),
     options: z.array(z.string()).optional(), // For select fields
@@ -69,15 +63,13 @@ export const UpdateEventSchema = z.object({
   startDate: z.string().datetime("Invalid start date format").optional(),
   endDate: z.string().datetime("Invalid end date format").optional(),
   location: z.string().min(3, "Location must be at least 3 characters").optional(),
-  capacity: z.coerce.number().int().min(1, "Capacity must be at least 1").optional(),
-  ageMin: z.coerce.number().int().min(0, "Minimum age must be 0 or greater").optional(),
-  ageMax: z.coerce.number().int().max(120, "Maximum age must be 120 or less").optional(),
+  capacity: z.number().int().min(1, "Capacity must be at least 1").optional(),
+  ageMin: z.number().int().min(0, "Minimum age must be 0 or greater").optional(),
+  ageMax: z.number().int().max(120, "Maximum age must be 120 or less").optional(),
   customFields: z.array(z.object({
     key: z.string().min(1, "Field key is required"),
     label: z.string().min(1, "Field label is required"),
-    type: z.enum(['text', 'number', 'email', 'select', 'textarea'], {
-      errorMap: () => ({ message: "Invalid field type" })
-    }),
+    type: z.enum(['text', 'number', 'email', 'select', 'textarea']),
     required: z.boolean(),
     validation: z.string().optional(),
     options: z.array(z.string()).optional(),
@@ -92,9 +84,7 @@ export const OTPVerifySchema = z.object({
 });
 
 export const ApprovalSchema = z.object({
-  status: z.enum(['approved', 'rejected'], {
-    errorMap: () => ({ message: "Status must be either approved or rejected" })
-  }),
+  status: z.enum(['approved', 'rejected']),
   reason: z.string().optional(),
 });
 
@@ -106,16 +96,16 @@ export const ScanQRSchema = z.object({
 export const QueryEventsSchema = z.object({
   status: z.enum(['upcoming', 'ongoing', 'completed', 'all']).optional().default('upcoming'),
   search: z.string().optional(),
-  page: z.coerce.number().int().min(1).optional().default(1),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(10),
+  page: z.number().int().min(1).optional().default(1),
+  limit: z.number().int().min(1).max(100).optional().default(10),
   managerId: z.string().uuid().optional(),
 });
 
 export const QueryRegistrantsSchema = z.object({
   eventId: z.string().uuid("Invalid event ID format"),
   status: z.enum(['pending', 'approved', 'rejected', 'flagged', 'all']).optional().default('all'),
-  page: z.coerce.number().int().min(1).optional().default(1),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  page: z.number().int().min(1).optional().default(1),
+  limit: z.number().int().min(1).max(100).optional().default(20),
 });
 
 export const QueryAuditLogsSchema = z.object({
@@ -124,15 +114,13 @@ export const QueryAuditLogsSchema = z.object({
   action: z.string().optional(),
   actorId: z.string().uuid().optional(),
   targetType: z.string().optional(),
-  page: z.coerce.number().int().min(1).optional().default(1),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  page: z.number().int().min(1).optional().default(1),
+  limit: z.number().int().min(1).max(100).optional().default(50),
 });
 
 export const PhotoUploadSchema = z.object({
   photo: z.string().min(1, "Photo data is required"), // Base64 or file path
-  mimeType: z.enum(['image/jpeg', 'image/jpg', 'image/png'], {
-    errorMap: () => ({ message: "Photo must be JPEG or PNG format" })
-  }),
+  mimeType: z.enum(['image/jpeg', 'image/jpg', 'image/png']),
 });
 
 // Utility function to normalize Philippine phone numbers
@@ -160,7 +148,7 @@ export const validateRequest = (schema: z.ZodSchema) => {
         ...req.body,
         ...req.query,
         ...req.params,
-      });
+      }) as any;
       
       // Normalize phone number if present
       if (validatedData.phone) {
@@ -173,7 +161,7 @@ export const validateRequest = (schema: z.ZodSchema) => {
       if (error instanceof z.ZodError) {
         return res.status(400).json({
           error: 'Validation failed',
-          details: error.errors,
+          details: error.issues,
         });
       }
       next(error);
@@ -230,7 +218,7 @@ export const validateCustomFieldValue = (value: any, field: any): boolean => {
     case 'email':
       return z.string().email().safeParse(value).success;
     case 'number':
-      return z.coerce.number().safeParse(value).success;
+      return z.number().safeParse(Number(value)).success;
     case 'select':
       return field.options && field.options.includes(value);
     default:
