@@ -1,246 +1,260 @@
-// src/utils/validation.ts - Zod validation schemas
 import { z } from 'zod';
 
-// Import Prisma enums directly from generated client
-// Make sure you run `npx prisma generate` first
-import { UserRole, RegistrantStatus } from '@prisma/client';
-
 // Philippine phone number regex
-export const PH_PHONE_REGEX = /^(\+63|0)9\d{9}$/;
+const PH_PHONE_REGEX = /^(\+63|0)9\d{9}$/;
 
-// Age validation constants
-export const MIN_AGE = 0;
-export const MAX_AGE = 120;
+// Custom error messages in Taglish
+const MESSAGES = {
+  REQUIRED: 'Kinakailangan ang field na ito',
+  INVALID_EMAIL: 'Hindi valid na email address',
+  INVALID_PHONE: 'Hindi valid na Philippine phone number (dapat 09XXXXXXXXX o +639XXXXXXXXX)',
+  PASSWORD_TOO_SHORT: 'Password dapat hindi bababa sa 8 characters',
+  AGE_INVALID: 'Edad dapat numero at hindi bababa sa 0',
+  NAME_TOO_SHORT: 'Pangalan dapat hindi bababa sa 2 characters',
+  ADDRESS_TOO_SHORT: 'Address dapat hindi bababa sa 5 characters',
+  BARANGAY_TOO_SHORT: 'Barangay dapat hindi bababa sa 2 characters',
+  INVALID_UUID: 'Hindi valid na UUID format',
+  FILE_TOO_LARGE: 'File sobrang laki (maximum 5MB)',
+  INVALID_FILE_TYPE: 'Hindi valid na file type',
+  OTP_INVALID: 'OTP dapat 6 digits',
+  FUTURE_DATE_REQUIRED: 'Date dapat sa hinaharap',
+  END_DATE_AFTER_START: 'End date dapat mas late kaysa start date'
+};
 
-// User validation schemas
-export const createUserSchema = z.object({
-  email: z.string().email('Invalid email format'),
-  phone: z.string().regex(PH_PHONE_REGEX, 'Invalid Philippine phone number').optional(),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  barangay: z.string().min(2, 'Barangay must be at least 2 characters').optional(),
-  role: z.nativeEnum(UserRole).default(UserRole.RESIDENT),
+// User role enum - using older Zod syntax
+export const UserRole = z.enum(['super_admin', 'event_manager', 'staff', 'resident', 'guest']);
+
+// Registration status enum - using older Zod syntax
+export const RegistrationStatus = z.enum(['pending', 'approved', 'rejected', 'flagged']);
+
+// Base validation schemas - using older Zod syntax without required_error
+export const emailSchema = z
+  .string()
+  .min(1, MESSAGES.REQUIRED)
+  .email(MESSAGES.INVALID_EMAIL)
+  .transform(val => val.toLowerCase().trim());
+
+export const phoneSchema = z
+  .string()
+  .min(1, MESSAGES.REQUIRED)
+  .regex(PH_PHONE_REGEX, MESSAGES.INVALID_PHONE)
+  .transform((phone) => {
+    // Normalize to +63 format
+    if (phone.startsWith('09')) {
+      return phone.replace('09', '+639');
+    }
+    return phone;
+  });
+
+export const passwordSchema = z
+  .string()
+  .min(8, MESSAGES.PASSWORD_TOO_SHORT);
+
+export const nameSchema = z
+  .string()
+  .min(2, MESSAGES.NAME_TOO_SHORT)
+  .transform(val => val.trim());
+
+export const addressSchema = z
+  .string()
+  .min(5, MESSAGES.ADDRESS_TOO_SHORT)
+  .transform(val => val.trim());
+
+export const ageSchema = z
+  .number(MESSAGES.AGE_INVALID)
+  .int(MESSAGES.AGE_INVALID)
+  .min(0, MESSAGES.AGE_INVALID);
+
+export const barangaySchema = z
+  .string()
+  .min(2, MESSAGES.BARANGAY_TOO_SHORT)
+  .transform(val => val.trim());
+
+export const uuidSchema = z
+  .string()
+  .uuid(MESSAGES.INVALID_UUID);
+
+// Custom field validation
+export const customFieldSchema = z.object({
+  key: z.string().min(1),
+  label: z.string().min(1),
+  type: z.enum(['text', 'number', 'email', 'phone', 'select', 'textarea']),
+  required: z.boolean().default(false),
+  validation: z.string().optional(), // regex string for validation
+  options: z.array(z.string()).optional() // for select type
 });
 
-export const updateUserSchema = createUserSchema.partial().omit({ password: true });
+// File upload validation - using older syntax
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/jpg'];
+
+export const fileUploadSchema = z.object({
+  filename: z.string(),
+  mimetype: z.string().refine(
+    (type) => ACCEPTED_IMAGE_TYPES.includes(type), 
+    MESSAGES.INVALID_FILE_TYPE
+  ),
+  size: z.number().max(MAX_FILE_SIZE, MESSAGES.FILE_TOO_LARGE)
+});
+
+// OTP validation
+export const otpSchema = z
+  .string()
+  .length(6, MESSAGES.OTP_INVALID)
+  .regex(/^\d{6}$/, MESSAGES.OTP_INVALID);
+
+// Date validation helpers
+export const futureDateSchema = z
+  .string()
+  .or(z.date())
+  .refine((date) => {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return dateObj > new Date();
+  }, MESSAGES.FUTURE_DATE_REQUIRED);
+
+// User schemas
+export const createUserSchema = z.object({
+  email: emailSchema,
+  password: passwordSchema,
+  name: nameSchema,
+  phone: phoneSchema.optional(),
+  role: UserRole,
+  barangay: barangaySchema.optional()
+});
 
 export const loginSchema = z.object({
-  email: z.string().email('Invalid email format'),
-  password: z.string().min(1, 'Password is required'),
+  email: emailSchema,
+  password: z.string().min(1, MESSAGES.REQUIRED)
 });
 
-export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, 'Current password is required'),
-  newPassword: z.string().min(8, 'New password must be at least 8 characters'),
-  confirmPassword: z.string().min(1, 'Password confirmation is required'),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
-});
+export const updateUserSchema = createUserSchema
+  .partial()
+  .omit({ password: true })
+  .extend({
+    id: uuidSchema
+  });
 
-// Custom field definition schema
-export const customFieldSchema = z.object({
-  key: z.string().min(1, 'Field key is required'),
-  label: z.string().min(1, 'Field label is required'),
-  type: z.enum(['text', 'number', 'select', 'checkbox', 'textarea']),
-  required: z.boolean().default(false),
-  options: z.array(z.string()).optional(),
-  validation: z.string().optional(), // Regex pattern
-  placeholder: z.string().optional(),
-  helperText: z.string().optional(),
-});
-
-// Event validation schemas
+// Event schemas
 export const createEventSchema = z.object({
-  title: z.string().min(3, 'Title must be at least 3 characters').max(200, 'Title too long'),
-  description: z.string().min(10, 'Description must be at least 10 characters').optional(),
-  startDate: z.string().datetime('Invalid start date format'),
-  endDate: z.string().datetime('Invalid end date format'),
-  location: z.string().min(5, 'Location must be at least 5 characters'),
-  capacity: z.number().int().positive('Capacity must be a positive integer').optional(),
-  ageMin: z.number().int().min(MIN_AGE, 'Minimum age cannot be negative').optional(),
-  ageMax: z.number().int().max(MAX_AGE, 'Maximum age cannot exceed 120').optional(),
-  customFields: z.array(customFieldSchema).optional(),
-  allowAutoCheckin: z.boolean().default(false),
-  retentionDays: z.number().int().min(1).max(365).default(90),
-  managerId: z.string().uuid('Invalid manager ID'),
+  title: z.string().min(3).transform(val => val.trim()),
+  description: z.string().optional(),
+  start_date: futureDateSchema,
+  end_date: futureDateSchema,
+  location: z.string().min(3).transform(val => val.trim()),
+  capacity: z.number().int().min(1).optional(),
+  age_min: z.number().int().min(0).optional(),
+  age_max: z.number().int().min(0).optional(),
+  custom_fields: z.array(customFieldSchema).default([]),
+  allow_autocheckin: z.boolean().default(false)
 }).refine((data) => {
-  if (data.ageMin && data.ageMax) {
-    return data.ageMin <= data.ageMax;
+  if (typeof data.start_date === 'string' && typeof data.end_date === 'string') {
+    return new Date(data.end_date) > new Date(data.start_date);
+  }
+  if (data.start_date instanceof Date && data.end_date instanceof Date) {
+    return data.end_date > data.start_date;
   }
   return true;
 }, {
-  message: "Minimum age cannot be greater than maximum age",
-  path: ["ageMax"],
+  message: MESSAGES.END_DATE_AFTER_START,
+  path: ['end_date']
 }).refine((data) => {
-  const startDate = new Date(data.startDate);
-  const endDate = new Date(data.endDate);
-  return startDate < endDate;
+  if (data.age_min && data.age_max) {
+    return data.age_max >= data.age_min;
+  }
+  return true;
 }, {
-  message: "End date must be after start date",
-  path: ["endDate"],
+  message: 'Maximum age dapat mas mataas o katumbas ng minimum age',
+  path: ['age_max']
 });
 
-export const updateEventSchema = createEventSchema.partial().omit({ managerId: true });
+export const updateEventSchema = createEventSchema
+  .partial()
+  .extend({
+    id: uuidSchema
+  });
 
-// Event query/filter schemas
-export const eventQuerySchema = z.object({
-  search: z.string().optional(),
-  status: z.enum(['upcoming', 'ongoing', 'completed']).optional(),
-  managerId: z.string().uuid().optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(10),
-});
-
-// Registrant validation schemas
+// Registration schemas
 export const registerSchema = z.object({
-  eventId: z.string().uuid('Invalid event ID'),
-  name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name too long'),
-  address: z.string().min(5, 'Address must be at least 5 characters').max(500, 'Address too long'),
-  age: z.number().int().min(MIN_AGE, 'Age must be a positive number').max(MAX_AGE, 'Invalid age'),
-  phone: z.string().regex(PH_PHONE_REGEX, 'Invalid Philippine phone number'),
-  barangay: z.string().min(2, 'Barangay must be at least 2 characters').max(100, 'Barangay name too long'),
-  customFieldValues: z.record(z.any()).optional(),
-  notes: z.string().max(1000, 'Notes too long').optional(),
-  photoTempId: z.string().uuid('Invalid photo temp ID').optional(),
-  userId: z.string().uuid().optional(), // For registered users
+  event_id: uuidSchema,
+  name: nameSchema,
+  address: addressSchema,
+  age: ageSchema,
+  phone: phoneSchema,
+  barangay: barangaySchema,
+  notes: z.string().optional(),
+  custom_field_values: z.record(z.any()).default({}),
+  photo_temp_id: uuidSchema.optional()
 });
 
-export const updateRegistrantStatusSchema = z.object({
-  status: z.nativeEnum(RegistrantStatus),
-  rejectionReason: z.string().min(1, 'Rejection reason is required').optional(),
-  flagReason: z.string().min(1, 'Flag reason is required').optional(),
-  approvedBy: z.string().uuid().optional(),
-}).refine((data) => {
-  if (data.status === RegistrantStatus.REJECTED && !data.rejectionReason) {
-    return false;
-  }
-  if ((data.status === RegistrantStatus.FLAGGED_AGE || data.status === RegistrantStatus.FLAGGED_OTHER) && !data.flagReason) {
-    return false;
-  }
-  return true;
-}, {
-  message: "Reason is required when rejecting or flagging",
-  path: ["rejectionReason", "flagReason"],
+export const approveRejectRegistrantSchema = z.object({
+  registrant_id: uuidSchema,
+  action: z.enum(['approve', 'reject']),
+  reason: z.string().optional()
 });
 
-// OTP validation schemas
-export const otpVerificationSchema = z.object({
-  registrantId: z.string().uuid('Invalid registrant ID'),
-  code: z.string().length(6, 'OTP must be exactly 6 digits').regex(/^\d{6}$/, 'OTP must contain only digits'),
+// OTP schemas
+export const sendOtpSchema = z.object({
+  registrant_id: uuidSchema
 });
 
-export const resendOtpSchema = z.object({
-  registrantId: z.string().uuid('Invalid registrant ID'),
+export const verifyOtpSchema = z.object({
+  registrant_id: uuidSchema,
+  code: otpSchema
 });
 
-// Photo upload validation
-export const photoUploadSchema = z.object({
-  filename: z.string().min(1, 'Filename is required'),
-  mimetype: z.enum(['image/jpeg', 'image/png', 'image/jpg'], {
-    errorMap: () => ({ message: 'Only JPEG and PNG images are allowed' })
-  }),
-  size: z.number().max(5242880, 'Image size must be less than 5MB'), // 5MB
-});
-
-// QR scan validation
+// QR scan schema
 export const qrScanSchema = z.object({
-  qrValue: z.string().min(1, 'QR value is required'),
-  eventId: z.string().uuid('Invalid event ID'),
-  scannedById: z.string().uuid('Invalid scanner user ID'),
-  metadata: z.record(z.any()).optional(),
+  qr_value: z.string().min(1, MESSAGES.REQUIRED),
+  event_id: uuidSchema.optional()
 });
 
-// Attendance validation
+// Attendance schema
 export const attendanceSchema = z.object({
-  registrantId: z.string().uuid('Invalid registrant ID'),
-  eventId: z.string().uuid('Invalid event ID'),
-  checkinTime: z.string().datetime().optional(),
-  metadata: z.record(z.any()).optional(),
+  registrant_id: uuidSchema,
+  event_id: uuidSchema,
+  action: z.enum(['checkin', 'checkout']).default('checkin')
 });
 
-// Audit log query validation
-export const auditLogQuerySchema = z.object({
-  actorId: z.string().uuid().optional(),
-  targetType: z.string().optional(),
-  targetId: z.string().uuid().optional(),
-  action: z.string().optional(),
-  startDate: z.string().datetime().optional(),
-  endDate: z.string().datetime().optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-});
-
-// Pagination schema (reusable)
+// Query parameter schemas
 export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(10),
+  limit: z.coerce.number().int().min(1).max(100).default(20)
 });
 
-// Search schema (reusable)
-export const searchSchema = z.object({
-  search: z.string().min(1).optional(),
-  sortBy: z.string().optional(),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+export const eventListSchema = paginationSchema.extend({
+  status: z.enum(['upcoming', 'ongoing', 'past', 'all']).default('upcoming'),
+  search: z.string().optional(),
+  manager_id: uuidSchema.optional()
 });
 
-// Validation helper functions
-export const validateCustomFields = (customFieldValues: Record<string, any>, customFields: any[]) => {
-  const schema = z.object(
-    customFields.reduce((acc, field) => {
-      let fieldSchema: z.ZodType<any>;
-      
-      switch (field.type) {
-        case 'number':
-          fieldSchema = z.coerce.number();
-          break;
-        case 'checkbox':
-          fieldSchema = z.boolean();
-          break;
-        case 'select':
-          fieldSchema = z.enum(field.options || []);
-          break;
-        default:
-          fieldSchema = z.string();
-      }
-      
-      if (field.required) {
-        fieldSchema = fieldSchema.min(1, `${field.label} is required`);
-      } else {
-        fieldSchema = fieldSchema.optional();
-      }
-      
-      if (field.validation && field.type === 'text') {
-        fieldSchema = (fieldSchema as z.ZodString).regex(
-          new RegExp(field.validation), 
-          `Invalid ${field.label} format`
-        );
-      }
-      
-      acc[field.key] = fieldSchema;
-      return acc;
-    }, {} as Record<string, z.ZodType<any>>)
-  );
-  
-  return schema.parse(customFieldValues);
-};
+export const registrantListSchema = paginationSchema.extend({
+  event_id: uuidSchema,
+  status: RegistrationStatus.optional(),
+  search: z.string().optional()
+});
 
-// Phone number normalization helper
-export const normalizePhoneNumber = (phone: string): string => {
-  // Convert to +63 format
-  if (phone.startsWith('0')) {
-    return `+63${phone.substring(1)}`;
-  }
-  if (!phone.startsWith('+63')) {
-    return `+63${phone}`;
-  }
-  return phone;
-};
+export const auditLogSchema = paginationSchema.extend({
+  start_date: z.string().optional(),
+  end_date: z.string().optional(),
+  action: z.string().optional(),
+  actor_id: uuidSchema.optional()
+});
 
-// Export types for use in other files
+// Export type definitions
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 export type CreateEventInput = z.infer<typeof createEventSchema>;
+export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
-export type OtpVerificationInput = z.infer<typeof otpVerificationSchema>;
+export type ApproveRejectInput = z.infer<typeof approveRejectRegistrantSchema>;
+export type SendOtpInput = z.infer<typeof sendOtpSchema>;
+export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 export type QrScanInput = z.infer<typeof qrScanSchema>;
+export type AttendanceInput = z.infer<typeof attendanceSchema>;
+export type EventListQuery = z.infer<typeof eventListSchema>;
+export type RegistrantListQuery = z.infer<typeof registrantListSchema>;
+export type AuditLogQuery = z.infer<typeof auditLogSchema>;
+export type CustomField = z.infer<typeof customFieldSchema>;
+export type UserRoleType = z.infer<typeof UserRole>;
+export type RegistrationStatusType = z.infer<typeof RegistrationStatus>;
