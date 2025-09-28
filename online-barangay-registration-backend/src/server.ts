@@ -5,20 +5,13 @@ import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
+import fs from 'fs';
+import path from 'path';
 
 import { logger } from './utils/logger';
 import { connectDatabase } from './config/database';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/requestLogger';
-
-// Import routes
-import authRoutes from './routes/auth';
-import userRoutes from './routes/users';  
-import eventRoutes from './routes/events';
-import registrationRoutes from './routes/registrations';
-import adminRoutes from './routes/admin';
-import qrRoutes from './routes/qr';
-import uploadRoutes from './routes/upload';
 
 // Load environment variables
 dotenv.config();
@@ -30,8 +23,6 @@ const API_VERSION = process.env.API_VERSION || 'v1';
 // ================================================
 // MIDDLEWARE SETUP
 // ================================================
-
-// Security middleware
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
   contentSecurityPolicy: {
@@ -44,19 +35,15 @@ app.use(helmet({
   },
 }));
 
-// CORS configuration
-const corsOptions = {
+app.use(cors({
   origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000'],
   credentials: true,
-  optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-};
-app.use(cors(corsOptions));
+}));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
+app.use(rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
   message: {
     error: 'Too many requests from this IP, please try again later.',
@@ -64,24 +51,17 @@ const limiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-});
-app.use(limiter);
+}));
 
-// Body parsing middleware
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Request logging
 app.use(requestLogger);
-
-// Static file serving for uploads
 app.use('/uploads', express.static('uploads'));
 
 // ================================================
-// HEALTH CHECK ENDPOINTS
+// HEALTH CHECK
 // ================================================
-
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'OK',
@@ -95,39 +75,29 @@ app.get('/health', (req, res) => {
 app.get('/health/db', async (req, res) => {
   try {
     const db = await connectDatabase();
-    const result = await db.query('SELECT 1 as health_check');
-    res.status(200).json({
-      status: 'OK',
-      database: 'Connected',
-      timestamp: new Date().toISOString(),
-    });
+    await db.query('SELECT 1 as health_check');
+    res.status(200).json({ status: 'OK', database: 'Connected' });
   } catch (error) {
     logger.error('Database health check failed:', error);
-    res.status(503).json({
-      status: 'ERROR',
-      database: 'Disconnected',
-      error: 'Database connection failed',
-      timestamp: new Date().toISOString(),
-    });
+    res.status(503).json({ status: 'ERROR', database: 'Disconnected' });
   }
 });
 
 // ================================================
-// API ROUTES
+// AUTOLOAD ROUTES
 // ================================================
-
 const apiRouter = express.Router();
+const routesPath = path.join(__dirname, 'routes');
 
-// Mount route modules
-apiRouter.use('/auth', authRoutes);
-apiRouter.use('/users', userRoutes);
-apiRouter.use('/events', eventRoutes);
-apiRouter.use('/registrations', registrationRoutes);
-apiRouter.use('/admin', adminRoutes);
-apiRouter.use('/qr', qrRoutes);
-apiRouter.use('/upload', uploadRoutes);
+fs.readdirSync(routesPath).forEach((file) => {
+  if (file.endsWith('.ts') || file.endsWith('.js')) {
+    const route = require(path.join(routesPath, file)).default;
+    const routeName = `/${file.replace(/\.(ts|js)$/, '')}`;
+    apiRouter.use(routeName, route);
+    logger.info(`✅ Route loaded: /api/${API_VERSION}${routeName}`);
+  }
+});
 
-// Mount API router with version prefix
 app.use(`/api/${API_VERSION}`, apiRouter);
 
 // Root endpoint
@@ -137,65 +107,44 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     description: 'Online Barangay Registration System - PWA Backend',
     apiVersion: API_VERSION,
-    endpoints: {
-      health: '/health',
-      api: `/api/${API_VERSION}`,
-      docs: `/api/${API_VERSION}/docs`
-    },
+    endpoints: { health: '/health', api: `/api/${API_VERSION}` },
     timestamp: new Date().toISOString(),
   });
 });
 
 // ================================================
-// ERROR HANDLING MIDDLEWARE
+// ERROR HANDLERS
 // ================================================
-
 app.use(notFoundHandler);
 app.use(errorHandler);
 
 // ================================================
-// SERVER STARTUP
+// START SERVER
 // ================================================
-
 async function startServer() {
   try {
-    // Test database connection
     await connectDatabase();
     logger.info('Database connection established successfully');
 
-    // Create HTTP server
     const server = createServer(app);
-
-    // Start listening
     server.listen(PORT, () => {
       logger.info(`🚀 Server running on port ${PORT}`);
-      logger.info(`📚 API Documentation: http://localhost:${PORT}/api/${API_VERSION}`);
-      logger.info(`🏥 Health Check: http://localhost:${PORT}/health`);
-      logger.info(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+      logger.info(`📚 API: http://localhost:${PORT}/api/${API_VERSION}`);
+      logger.info(`🏥 Health: http://localhost:${PORT}/health`);
     });
 
-    // Graceful shutdown
     process.on('SIGTERM', () => {
       logger.info('SIGTERM received, shutting down gracefully');
-      server.close(() => {
-        logger.info('Server closed');
-        process.exit(0);
-      });
+      server.close(() => process.exit(0));
     });
-
     process.on('SIGINT', () => {
       logger.info('SIGINT received, shutting down gracefully');
-      server.close(() => {
-        logger.info('Server closed');
-        process.exit(0);
-      });
+      server.close(() => process.exit(0));
     });
-
   } catch (error) {
     logger.error('Failed to start server:', error);
     process.exit(1);
   }
 }
 
-// Start the server
 startServer();
