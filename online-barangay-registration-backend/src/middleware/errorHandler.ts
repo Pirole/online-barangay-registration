@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { ZodError } from 'zod';
+import { ZodError, ZodIssue } from 'zod';
 import { logger } from '../utils/logger';
 
 export class AppError extends Error {
@@ -10,21 +10,24 @@ export class AppError extends Error {
     super(message);
     this.statusCode = statusCode;
     this.isOperational = isOperational;
-    
+
     Error.captureStackTrace(this, this.constructor);
   }
 }
 
+// Extend Error type for cases like Postgres, Multer, JWT
+interface ExtendedError extends Error {
+  code?: string | number;
+  errors?: ZodIssue[];
+}
+
 export const errorHandler = (
-  err: Error,
+  err: ExtendedError,
   req: Request,
   res: Response,
   next: NextFunction
-) => {
-  let error = { ...err } as any;
-  error.message = err.message;
-
-  // Log error
+): Response | void => {
+  // Log the error
   logger.error(`Error ${req.method} ${req.originalUrl}`, {
     error: err.message,
     stack: err.stack,
@@ -37,12 +40,12 @@ export const errorHandler = (
 
   // Zod validation error
   if (err instanceof ZodError) {
-    const message = err.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+    const message = err.issues.map((e: ZodIssue) => `${e.path.join('.')}: ${e.message}`).join(', ');
     return res.status(400).json({
       success: false,
       error: 'Validation Error',
       message,
-      details: err.errors,
+      details: err.issues,
     });
   }
 
@@ -73,7 +76,7 @@ export const errorHandler = (
   }
 
   // Database errors
-  if (err.code === '23505') { // PostgreSQL unique constraint violation
+  if (err.code === '23505') { // unique violation
     return res.status(409).json({
       success: false,
       error: 'Duplicate Entry',
@@ -81,7 +84,7 @@ export const errorHandler = (
     });
   }
 
-  if (err.code === '23503') { // PostgreSQL foreign key constraint violation
+  if (err.code === '23503') { // FK violation
     return res.status(400).json({
       success: false,
       error: 'Invalid Reference',
@@ -90,15 +93,15 @@ export const errorHandler = (
   }
 
   // Application errors
-  if (error.isOperational) {
-    return res.status(error.statusCode || 500).json({
+  if (err instanceof AppError && err.isOperational) {
+    return res.status(err.statusCode).json({
       success: false,
-      error: error.message,
+      error: err.message,
     });
   }
 
-  // Programming or unknown errors
-  res.status(500).json({
+  // Fallback
+  return res.status(500).json({
     success: false,
     error: 'Internal Server Error',
     message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong',

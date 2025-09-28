@@ -13,7 +13,7 @@ import { requestLogger } from './middleware/requestLogger';
 
 // Import routes
 import authRoutes from './routes/auth';
-import userRoutes from './routes/users';
+import userRoutes from './routes/users';  
 import eventRoutes from './routes/events';
 import registrationRoutes from './routes/registrations';
 import adminRoutes from './routes/admin';
