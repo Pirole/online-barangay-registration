@@ -1,5 +1,4 @@
 // src/App.tsx
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { EventProvider } from './context/EventContext';
@@ -15,7 +14,7 @@ import LoginPage from './pages/LoginPage';
 //import EventManagement from './pages/admin/EventManagement';
 
 // Components
-import AuthGuard from './components/layout/AuthGuard';
+// import AuthGuard from './components/layout/AuthGuard';
 
 function App() {
   return (

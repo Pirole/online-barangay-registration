@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useEvents } from '../context/EventContext';
-import { Event } from '../context/EventContext';
+import type { Event } from '../context/EventContext';
 
 const EventsPage: React.FC = () => {
   const { events, isLoading, error, fetchEvents } = useEvents();
