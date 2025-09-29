@@ -1,16 +1,18 @@
-export interface User {
+// src/types/auth.ts
+
+export interface AuthUser {
   id: string;
   email: string;
   phone?: string;
   password_hash: string;
-  role: UserRole;
+  role: AuthUserRole;
   name: string;
   barangay: string;
   created_at: Date;
   updated_at: Date;
 }
 
-export enum UserRole {
+export enum AuthUserRole {
   SUPER_ADMIN = 'super_admin',
   EVENT_MANAGER = 'event_manager',
   STAFF = 'staff',
@@ -21,7 +23,7 @@ export enum UserRole {
 export interface JwtPayload {
   userId: string;
   email: string;
-  role: UserRole;
+  role: AuthUserRole;
   iat?: number;
   exp?: number;
 }

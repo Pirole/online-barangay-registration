@@ -147,6 +147,9 @@ model Registration {
   customValues Json?             @map("custom_values")
   createdAt   DateTime           @default(now()) @map("created_at")
   updatedAt   DateTime           @updatedAt @map("updated_at")
+  otpCodeHash   String?          @map("otp_code_hash")
+  otpExpiresAt  DateTime?        @map("otp_expires_at")
+  otpAttempts   Int              @default(0)
 
   // Relations
   event   Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -220,9 +223,10 @@ model QrCode {
 model OtpRequest {
   id             String   @id @default(uuid())
   registrationId String   @map("registration_id")
-  codeHash       String   @map("code_hash")
-  expiresAt      DateTime @map("expires_at")
-  attempts       Int      @default(0)
+  codeHash       String   @map("code_hash")        // hash of OTP
+  expiresAt      DateTime @map("expires_at")       // expiry window
+  attempts       Int      @default(0)              // track retry attempts
+  maxAttempts    Int      @default(3)              // enforce lockout policy
   isUsed         Boolean  @default(false) @map("is_used")
   createdAt      DateTime @default(now()) @map("created_at")
 
@@ -230,8 +234,9 @@ model OtpRequest {
   registration Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
 
   @@map("otp_requests")
+  @@index([registrationId])
+  @@index([expiresAt])
 }
-
 // ========================
 // CUSTOM FIELDS
 // ========================
