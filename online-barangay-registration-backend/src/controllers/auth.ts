@@ -1,116 +1,120 @@
 import { Request, Response, NextFunction } from 'express';
-import bcrypt from 'bcrypt';
 import jwt, { SignOptions, Secret } from 'jsonwebtoken';
 import crypto from 'crypto';
 import prisma from '../config/prisma';
 import { logger } from '../utils/logger';
 import { AppError } from '../middleware/errorHandler';
 
+// --------------------------
 // Helpers
-const hashToken = (token: string) =>
+// --------------------------
+const hashToken = (token: string): string =>
   crypto.createHash('sha256').update(token).digest('hex');
 
-const generateAccessToken = (payload: object) => {
+const generateAccessToken = (payload: object): string => {
   const secret = process.env.JWT_SECRET as Secret;
   const options: SignOptions = {
-    expiresIn: (process.env.JWT_EXPIRES_IN as string) || '15m',
+    expiresIn: (process.env.JWT_EXPIRES_IN || '15m') as any,
   };
   return jwt.sign(payload, secret, options);
 };
 
-const generateRefreshToken = (payload: object) => {
+const generateRefreshToken = (payload: object): string => {
   const secret = process.env.JWT_REFRESH_SECRET as Secret;
   const options: SignOptions = {
-    expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+    expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN || '7d') as any,
   };
   return jwt.sign(payload, secret, options);
 };
 
-// =============================
-// REGISTER (EVENT REGISTRATION)
-// =============================
-export async function register(req: Request, res: Response) {
+// --------------------------
+// REGISTER (Standalone Event)
+// --------------------------
+export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const {
-      eventId,
-      firstName,
-      lastName,
-      age,
-      address,
-      barangay,
-      phone,
-      photoTempId,
-    } = req.body;
+    const { eventId, firstName, lastName, age, address, barangay, phone, photoTempId, customValues } =
+      req.body;
 
-    // Check if profile already exists for this phone
-    let profile = await prisma.profile.findUnique({
-      where: { contact: phone },
-    });
-
-    if (!profile) {
-      profile = await prisma.profile.create({
-        data: {
-          firstName,
-          lastName,
-          age,
-          address,
-          barangay,
-          contact: phone,
-        },
-      });
+    if (!eventId || !firstName || !lastName) {
+      throw new AppError('Missing required registration fields', 400);
     }
 
-    // Create the registration
+    // For standalone event registration, we don't create profiles
+    // Instead, we store the registration data directly with custom values
+    const registrationData = {
+      firstName,
+      lastName,
+      age: age ? Number(age) : null,
+      address,
+      barangay,
+      contact: phone,
+      ...(customValues || {})
+    };
+
+    // Create registration without profile
     const registration = await prisma.registration.create({
       data: {
         eventId,
-        profileId: profile.id,
+        profileId: null, // No profile for standalone registrations
         photoPath: photoTempId ? `/uploads/${photoTempId}` : null,
+        customValues: registrationData, // Store all form data as JSON
       },
       include: {
         event: true,
-        profile: true,
       },
     });
 
-    logger.info(`✅ Registration created for ${profile.firstName} ${profile.lastName}`);
-    return res.status(201).json({ message: 'Registration successful', registration });
+    logger.info(`✅ Registration created for ${firstName} ${lastName} - Event: ${registration.event?.title}`);
+    res.status(201).json({ message: 'Registration successful', registration });
   } catch (error) {
     logger.error('❌ Registration failed', error);
-    return res.status(500).json({ error: 'Registration failed', details: error });
+    next(error);
   }
-}
+};
 
-// =============================
-// LOGIN (ACCOUNT-BASED)
-// =============================
-export const login = async (req: Request, res: Response, next: NextFunction) => {
+// --------------------------
+// LOGIN (For Admin/Staff Accounts)
+// --------------------------
+export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { email, password } = req.body;
 
+    if (!email || !password) throw new AppError('Email and password required', 400);
+
     const user = await prisma.user.findUnique({
       where: { email },
-      include: { profile: true },
     });
 
     if (!user) throw new AppError('Invalid credentials', 401);
     if (!user.isActive) throw new AppError('Account inactive', 403);
 
+    const bcrypt = await import('bcrypt');
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) throw new AppError('Invalid credentials', 401);
 
     const payload = { userId: user.id, email: user.email, role: user.role };
+
     const accessToken = generateAccessToken(payload);
     const refreshToken = generateRefreshToken(payload);
-
     const hashed = hashToken(refreshToken);
+
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
+    // Store refresh token using token as unique identifier
     await prisma.refreshToken.upsert({
-      where: { userId: user.id },
-      update: { token: hashed, expiresAt, createdAt: new Date() },
-      create: { userId: user.id, token: hashed, expiresAt },
+      where: { 
+        token: hashed // Using token as unique identifier
+      },
+      update: {
+        expiresAt,
+        createdAt: new Date(),
+      },
+      create: {
+        userId: user.id,
+        token: hashed,
+        expiresAt,
+      },
     });
 
     res.json({
@@ -122,54 +126,74 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
   }
 };
 
-// =============================
+// --------------------------
 // REFRESH TOKEN
-// =============================
-export const refreshToken = async (req: Request, res: Response, next: NextFunction) => {
+// --------------------------
+export const refreshToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    res.json({ success: true, message: 'Refresh token endpoint placeholder' });
+    const { token } = req.body;
+    if (!token) throw new AppError('Refresh token required', 400);
+
+    const hashed = hashToken(token);
+    const stored = await prisma.refreshToken.findFirst({
+      where: { token: hashed },
+      include: { user: true },
+    });
+
+    if (!stored) throw new AppError('Invalid refresh token', 401);
+
+    const payload = { userId: stored.user.id, email: stored.user.email, role: stored.user.role };
+    const newAccessToken = generateAccessToken(payload);
+
+    res.json({ accessToken: newAccessToken });
   } catch (error) {
     next(error);
   }
 };
 
-// =============================
+// --------------------------
 // LOGOUT
-// =============================
-export const logout = async (req: Request, res: Response, next: NextFunction) => {
+// --------------------------
+export const logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    // Prisma delete refresh token logic here
+    const { token } = req.body;
+    if (!token) throw new AppError('Refresh token required', 400);
+
+    const hashed = hashToken(token);
+    await prisma.refreshToken.deleteMany({ where: { token: hashed } });
+
     res.json({ success: true, message: 'Logged out successfully' });
   } catch (error) {
     next(error);
   }
 };
 
-// =============================
-// ME (PROFILE)
-// =============================
-export const me = async (req: Request, res: Response, next: NextFunction) => {
+// --------------------------
+// ME (Profile Info for Authenticated User)
+// --------------------------
+export const me = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const { id, email, role } = req.user;
+    // Type assertion for req.user - you might want to extend the Request type properly
+    const userFromToken = req.user as { userId: string; email: string; role: string } | undefined;
+    
+    if (!userFromToken) throw new AppError('Unauthorized', 401);
 
     const user = await prisma.user.findUnique({
-      where: { id },
+      where: { id: userFromToken.userId },
       include: { profile: true },
     });
 
-    return res.json({
-      id,
-      email,
-      role,
-      firstName: user?.profile?.firstName || null,
-      lastName: user?.profile?.lastName || null,
-      phone: user?.profile?.contact || null,
+    if (!user) throw new AppError('User not found', 404);
+
+    res.json({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      firstName: user.profile?.firstName || null,
+      lastName: user.profile?.lastName || null,
+      phone: user.profile?.contact || null,
     });
-  } catch (err) {
-    return next(err);
+  } catch (error) {
+    next(error);
   }
 };
