@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import { createServer } from 'http';
 import fs from 'fs';
 import path from 'path';
+import routes from './routes';
 
 import { logger } from './utils/logger';
 import { connectDatabase } from './config/database';
@@ -19,7 +20,8 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 const API_VERSION = process.env.API_VERSION || 'v1';
-
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // ================================================
 // MIDDLEWARE SETUP
 // ================================================
@@ -88,6 +90,7 @@ app.get('/health/db', async (req, res) => {
 // ================================================
 const apiRouter = express.Router();
 const routesPath = path.join(__dirname, 'routes');
+console.log('Routes path:', routesPath);
 
 fs.readdirSync(routesPath).forEach((file) => {
   if (file.endsWith('.ts') || file.endsWith('.js')) {
@@ -146,5 +149,26 @@ async function startServer() {
     process.exit(1);
   }
 }
+
+app.use(`/api/${API_VERSION}`, apiRouter);
+
+// Add an index response for `/api/v1`
+app.get(`/api/${API_VERSION}`, (req, res) => {
+  res.json({
+    message: `Welcome to API v${API_VERSION}`,
+    availableRoutes: [
+      '/auth',
+      '/events',
+      '/registrations',
+      '/users',
+      '/otp',
+      '/teams',
+      '/upload',
+      '/customFields',
+      '/admin',
+      '/qr'
+    ]
+  });
+});
 
 startServer();

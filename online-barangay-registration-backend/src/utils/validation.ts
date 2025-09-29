@@ -3,15 +3,15 @@ import { z } from 'zod';
 // Phone number validation for Philippine format
 const phoneRegex = /^(\+63|0)9\d{9}$/;
 
-// Custom validation schemas
 export const RegisterSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  address: z.string().min(5, "Address must be at least 5 characters"),
-  age: z.number().int().min(0, "Age must be a positive number"),
-  phone: z.string().regex(phoneRegex, "Invalid Philippine phone number format"),
-  barangay: z.string().min(2, "Barangay must be at least 2 characters"),
-  customFields: z.record(z.string(), z.any()).optional(),
-  photoTempId: z.string().uuid("Invalid photo temp ID format"),
+  eventId: z.string().uuid(),
+  firstName: z.string().min(1, "First name required"),
+  lastName: z.string().min(1, "Last name required"),
+  age: z.number().int().positive(),
+  address: z.string().min(1),
+  barangay: z.string().min(1),
+  phone: z.string().min(10),
+  photoTempId: z.string().optional()
 });
 
 export const LoginSchema = z.object({

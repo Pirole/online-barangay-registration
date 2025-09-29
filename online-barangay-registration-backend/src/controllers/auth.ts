@@ -2,17 +2,18 @@ import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcrypt';
 import jwt, { SignOptions, Secret } from 'jsonwebtoken';
 import crypto from 'crypto';
-import { query } from '../config/database';
+import prisma from '../config/prisma';
 import { logger } from '../utils/logger';
 import { AppError } from '../middleware/errorHandler';
 
 // Helpers
-const hashToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
+const hashToken = (token: string) =>
+  crypto.createHash('sha256').update(token).digest('hex');
 
 const generateAccessToken = (payload: object) => {
   const secret = process.env.JWT_SECRET as Secret;
   const options: SignOptions = {
-    expiresIn: (process.env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn']) || '15m',
+    expiresIn: (process.env.JWT_EXPIRES_IN as string) || '15m',
   };
   return jwt.sign(payload, secret, options);
 };
@@ -20,128 +21,97 @@ const generateAccessToken = (payload: object) => {
 const generateRefreshToken = (payload: object) => {
   const secret = process.env.JWT_REFRESH_SECRET as Secret;
   const options: SignOptions = {
-    expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN as jwt.SignOptions['expiresIn']) || '7d',
+    expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   };
   return jwt.sign(payload, secret, options);
 };
 
-export const register = async (req: Request, res: Response, next: NextFunction) => {
+// =============================
+// REGISTER (EVENT REGISTRATION)
+// =============================
+export async function register(req: Request, res: Response) {
   try {
-    const { email, password, firstName, lastName, phone, barangay } = req.body;
+    const {
+      eventId,
+      firstName,
+      lastName,
+      age,
+      address,
+      barangay,
+      phone,
+      photoTempId,
+    } = req.body;
 
-    // check existing
-    const existing = await query('SELECT id FROM users WHERE email = $1', [email]);
-    if (existing.rows.length > 0) {
-      throw new AppError('Email already registered', 409);
+    // Check if profile already exists for this phone
+    let profile = await prisma.profile.findUnique({
+      where: { contact: phone },
+    });
+
+    if (!profile) {
+      profile = await prisma.profile.create({
+        data: {
+          firstName,
+          lastName,
+          age,
+          address,
+          barangay,
+          contact: phone,
+        },
+      });
     }
 
-    const passwordHash = await bcrypt.hash(password, 12);
-
-    // insert user
-    const insertUser = await query(
-      `INSERT INTO users (email, phone, password_hash, role, is_active, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, true, NOW(), NOW()) RETURNING id, email, role`,
-      [email, phone || null, passwordHash, 'RESIDENT']
-    );
-
-    const user = insertUser.rows[0];
-
-    // insert profile
-    await query(
-      `INSERT INTO profiles (user_id, first_name, last_name, barangay, created_at)
-       VALUES ($1, $2, $3, $4, NOW())`,
-      [user.id, firstName, lastName, barangay || null]
-    );
-
-    res.status(201).json({
-      success: true,
-      message: 'Registered successfully',
-      data: { id: user.id, email: user.email },
+    // Create the registration
+    const registration = await prisma.registration.create({
+      data: {
+        eventId,
+        profileId: profile.id,
+        photoPath: photoTempId ? `/uploads/${photoTempId}` : null,
+      },
+      include: {
+        event: true,
+        profile: true,
+      },
     });
+
+    logger.info(`✅ Registration created for ${profile.firstName} ${profile.lastName}`);
+    return res.status(201).json({ message: 'Registration successful', registration });
   } catch (error) {
-    next(error);
+    logger.error('❌ Registration failed', error);
+    return res.status(500).json({ error: 'Registration failed', details: error });
   }
-};
+}
 
-// Refresh token
-export const refreshToken = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    // logic: validate refresh token, issue new access token
-    res.json({ success: true, message: 'Refresh token endpoint placeholder' });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Logout
-export const logout = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    // logic: remove refresh token from DB
-    res.json({ success: true, message: 'Logged out successfully' });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Me (profile)
-export const me = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const { id, email, role, profile } = req.user;
-
-    return res.json({
-      id,
-      email,
-      role,
-      firstName: profile?.firstName || null,
-      lastName: profile?.lastName || null,
-      phone: profile?.phone || null,
-    });
-  } catch (err) {
-    return next(err); // <-- add return here
-  }
-};
-
-
+// =============================
+// LOGIN (ACCOUNT-BASED)
+// =============================
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password } = req.body;
 
-    const result = await query(
-      `SELECT id, email, password_hash, role, is_active FROM users WHERE email = $1`,
-      [email]
-    );
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { profile: true },
+    });
 
-    if (result.rows.length === 0) {
-      throw new AppError('Invalid credentials', 401);
-    }
+    if (!user) throw new AppError('Invalid credentials', 401);
+    if (!user.isActive) throw new AppError('Account inactive', 403);
 
-    const user = result.rows[0];
-
-    if (!user.is_active) throw new AppError('Account inactive', 403);
-
-    const match = await bcrypt.compare(password, user.password_hash);
+    const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) throw new AppError('Invalid credentials', 401);
 
     const payload = { userId: user.id, email: user.email, role: user.role };
-
     const accessToken = generateAccessToken(payload);
     const refreshToken = generateRefreshToken(payload);
 
-    // store hashed refresh token
     const hashed = hashToken(refreshToken);
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    await query(
-      `INSERT INTO refresh_tokens (user_id, token, expires_at, created_at)
-       VALUES ($1, $2, $3, NOW())
-       ON CONFLICT (user_id) DO UPDATE SET token = $2, expires_at = $3, created_at = NOW()`,
-      [user.id, hashed, expiresAt]
-    );
+    await prisma.refreshToken.upsert({
+      where: { userId: user.id },
+      update: { token: hashed, expiresAt, createdAt: new Date() },
+      create: { userId: user.id, token: hashed, expiresAt },
+    });
 
     res.json({
       success: true,
@@ -152,3 +122,54 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
   }
 };
 
+// =============================
+// REFRESH TOKEN
+// =============================
+export const refreshToken = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, message: 'Refresh token endpoint placeholder' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// =============================
+// LOGOUT
+// =============================
+export const logout = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Prisma delete refresh token logic here
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// =============================
+// ME (PROFILE)
+// =============================
+export const me = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { id, email, role } = req.user;
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+      include: { profile: true },
+    });
+
+    return res.json({
+      id,
+      email,
+      role,
+      firstName: user?.profile?.firstName || null,
+      lastName: user?.profile?.lastName || null,
+      phone: user?.profile?.contact || null,
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
