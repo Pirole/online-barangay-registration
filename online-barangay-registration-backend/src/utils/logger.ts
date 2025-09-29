@@ -1,6 +1,11 @@
 import winston from 'winston';
 import path from 'path';
+import fs from 'fs';
 
+const logDir = path.join(process.cwd(), 'logs');
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir, { recursive: true });
+}
 const logFormat = winston.format.combine(
   winston.format.timestamp(),
   winston.format.errors({ stack: true }),

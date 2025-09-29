@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PHONE_REGEX } from '../constants/regex';
 
 export const guestRegistrationSchema = z.object({
   eventId: z.string().uuid('Invalid event ID'),
@@ -9,14 +10,14 @@ export const guestRegistrationSchema = z.object({
   age: z.number().int().min(1).max(120, 'Age must be between 1 and 120'),
   address: z.string().min(10, 'Address must be at least 10 characters'),
   barangay: z.string().min(2, 'Barangay must be at least 2 characters'),
-  customFieldValues: z.record(z.any()).default({}),
+  customFieldValues: z.record(z.string(), z.any()).default({}),
   teamId: z.string().uuid().optional(),
   notes: z.string().max(500, 'Notes must not exceed 500 characters').optional(),
 });
 
 export const userRegistrationSchema = z.object({
   eventId: z.string().uuid('Invalid event ID'),
-  customFieldValues: z.record(z.any()).default({}),
+  customFieldValues: z.record(z.string(), z.any()).default({}),
   teamId: z.string().uuid().optional(),
   notes: z.string().max(500, 'Notes must not exceed 500 characters').optional(),
 });

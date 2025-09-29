@@ -4,9 +4,14 @@ import { logger } from './logger';
 
 const TEXTBEE_API_KEY = process.env.TEXTBEE_API_KEY || '';
 
+interface TextbeeResponse {
+  success: boolean;
+  error?: string;
+}
+
 export const sendSMS = async (to: string, message: string): Promise<boolean> => {
   try {
-    const res = await axios.post('https://api.textbee.io/send', {
+    const res = await axios.post<TextbeeResponse>('https://api.textbee.io/send', {
       apiKey: TEXTBEE_API_KEY,
       to,
       message,
