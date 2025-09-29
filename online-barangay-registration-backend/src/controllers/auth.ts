@@ -63,6 +63,38 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
   }
 };
 
+// Refresh token
+export const refreshToken = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // logic: validate refresh token, issue new access token
+    res.json({ success: true, message: 'Refresh token endpoint placeholder' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Logout
+export const logout = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // logic: remove refresh token from DB
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Me (profile)
+export const me = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) {
+      return res.json({ success: true, data: null });
+    }
+    res.json({ success: true, data: req.user });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password } = req.body;

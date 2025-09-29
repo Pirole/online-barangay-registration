@@ -1,29 +1,24 @@
 import { Router } from 'express';
-import { z } from 'zod';
 import { validateRequest } from '../middleware/validateRequest';
 import * as authController from '../controllers/auth';
+import { LoginSchema, RegisterSchema } from '../utils/validation';
+import { optionalAuth, authenticateToken } from '../middleware/auth';
 
 const router = Router();
 
-// Schema: Register
-const registerSchema = z.object({
-  body: z.object({
-    email: z.string().email(),
-    password: z.string().min(8),
-    firstName: z.string().min(1),
-    lastName: z.string().min(1),
-  }),
-});
+// Register (create account)
+router.post('/register', validateRequest(RegisterSchema), authController.register);
 
-// Schema: Login
-const loginSchema = z.object({
-  body: z.object({
-    email: z.string().email(),
-    password: z.string().min(8),
-  }),
-});
+// Login
+router.post('/login', validateRequest(LoginSchema), authController.login);
 
-// Routes
-router.post('/register', validateRequest(registerSchema), authController.register);
+// Refresh token
+router.post('/refresh-token', authController.refreshToken);
+
+// Logout
+router.post('/logout', authenticateToken, authController.logout);
+
+// Who am I / profile
+router.get('/me', optionalAuth, authController.me);
 
 export default router;
