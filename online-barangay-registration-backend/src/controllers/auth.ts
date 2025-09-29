@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions, Secret } from 'jsonwebtoken';
 import crypto from 'crypto';
 import { query } from '../config/database';
 import { logger } from '../utils/logger';
@@ -9,15 +9,21 @@ import { AppError } from '../middleware/errorHandler';
 // Helpers
 const hashToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
 
-const generateAccessToken = (payload: any) =>
-  jwt.sign(payload, process.env.JWT_SECRET!, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '15m',
-  });
+const generateAccessToken = (payload: object) => {
+  const secret = process.env.JWT_SECRET as Secret;
+  const options: SignOptions = {
+    expiresIn: (process.env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn']) || '15m',
+  };
+  return jwt.sign(payload, secret, options);
+};
 
-const generateRefreshToken = (payload: any) =>
-  jwt.sign(payload, process.env.JWT_REFRESH_SECRET!, {
-    expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
-  });
+const generateRefreshToken = (payload: object) => {
+  const secret = process.env.JWT_REFRESH_SECRET as Secret;
+  const options: SignOptions = {
+    expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN as jwt.SignOptions['expiresIn']) || '7d',
+  };
+  return jwt.sign(payload, secret, options);
+};
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -103,4 +109,3 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
   }
 };
 
-e

@@ -77,3 +77,25 @@ export const updateUser = async (req: Request, res: Response, next: NextFunction
       const pvals: any[] = [];
       let pidx = 1;
       if (firstName !== undefined) { profileFields.push(`first_name = $${pidx++}`); pvals.push(firstName); }
+      if (lastName !== undefined) { profileFields.push(`last_name = $${pidx++}`); pvals.push(lastName); }
+      if (barangay !== undefined) { profileFields.push(`barangay = $${pidx++}`); pvals.push(barangay); }
+      if (profileFields.length > 0) {
+        await query(`UPDATE profiles SET ${profileFields.join(', ')} WHERE user_id = $${pidx}`, [...pvals, id]);
+      }
+    }
+
+    res.json({ success: true, message: 'User updated' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteUser = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id;
+    await query(`DELETE FROM users WHERE id = $1`, [id]);
+    res.json({ success: true, message: 'User deleted' });
+  } catch (error) {
+    next(error);
+  }
+};
