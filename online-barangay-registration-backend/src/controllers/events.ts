@@ -79,27 +79,54 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
   }
 };
 
-export const updateEvent = async (req: Request, res: Response, next: NextFunction) => {
+export const updateEvent = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const id = req.params.id;
-    const allowed: string[] = ['title','description','location','startDate','endDate','capacity','ageMin','ageMax','isActive','managerId'];
+    const allowed: string[] = [
+      'title',
+      'description',
+      'location',
+      'startDate',
+      'endDate',
+      'capacity',
+      'ageMin',
+      'ageMax',
+      'isActive',
+      'managerId',
+    ];
+
     const sets: string[] = [];
     const vals: any[] = [];
     let idx = 1;
+
     for (const key of Object.keys(req.body)) {
       if (!allowed.includes(key)) continue;
       const column = key.replace(/[A-Z]/g, m => `_${m.toLowerCase()}`);
       sets.push(`${column} = $${idx++}`);
       vals.push((req.body as any)[key]);
     }
-    if (sets.length === 0) return res.json({ success: true, message: 'No changes' });
+
+    if (sets.length === 0) {
+      return res.json({ success: true, message: 'No changes' });
+    }
+
     vals.push(id);
-    await query(`UPDATE events SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${idx}`, vals);
-    res.json({ success: true, message: 'Event updated' });
+
+    await query(
+      `UPDATE events SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${idx}`,
+      vals
+    );
+
+    return res.json({ success: true, message: 'Event updated' }); // ✅ explicit return
   } catch (error) {
-    next(error);
+    return next(error); // ✅ explicit return
   }
 };
+
 
 export const deleteEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {

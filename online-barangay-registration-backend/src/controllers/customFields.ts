@@ -25,22 +25,48 @@ export const listCustomFieldsForEvent = async (req: Request, res: Response, next
   }
 };
 
-export const updateCustomField = async (req: Request, res: Response, next: NextFunction) => {
+export const updateCustomField = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const id = req.params.id;
     const { name, type, required } = req.body;
+
     const fields: string[] = [];
     const vals: any[] = [];
     let idx = 1;
-    if (name !== undefined) { fields.push(`name = $${idx++}`); vals.push(name); }
-    if (type !== undefined) { fields.push(`type = $${idx++}`); vals.push(type); }
-    if (required !== undefined) { fields.push(`required = $${idx++}`); vals.push(required); }
-    if (fields.length === 0) return res.json({ success: true, message: 'No change' });
+
+    if (name !== undefined) {
+      fields.push(`name = $${idx++}`);
+      vals.push(name);
+    }
+    if (type !== undefined) {
+      fields.push(`type = $${idx++}`);
+      vals.push(type);
+    }
+    if (required !== undefined) {
+      fields.push(`required = $${idx++}`);
+      vals.push(required);
+    }
+
+    if (fields.length === 0) {
+      return res.json({ success: true, message: 'No change' });
+    }
+
     vals.push(id);
-    await query(`UPDATE custom_fields SET ${fields.join(', ')}, created_at = created_at WHERE id = $${idx}`, vals); // preserve created_at
-    res.json({ success: true, message: 'Updated' });
+
+    await query(
+      `UPDATE custom_fields
+       SET ${fields.join(', ')}, created_at = created_at
+       WHERE id = $${idx}`,
+      vals
+    ); // preserve created_at
+
+    return res.json({ success: true, message: 'Updated' }); // <-- add return
   } catch (error) {
-    next(error);
+    return next(error); // <-- add return
   }
 };
 

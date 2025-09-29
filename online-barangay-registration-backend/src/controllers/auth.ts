@@ -87,13 +87,24 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
 export const me = async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!req.user) {
-      return res.json({ success: true, data: null });
+      return res.status(401).json({ error: 'Unauthorized' });
     }
-    res.json({ success: true, data: req.user });
-  } catch (error) {
-    next(error);
+
+    const { id, email, role, profile } = req.user;
+
+    return res.json({
+      id,
+      email,
+      role,
+      firstName: profile?.firstName || null,
+      lastName: profile?.lastName || null,
+      phone: profile?.phone || null,
+    });
+  } catch (err) {
+    return next(err); // <-- add return here
   }
 };
+
 
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {
