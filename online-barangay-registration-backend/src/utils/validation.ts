@@ -145,7 +145,11 @@ export const normalizePhoneNumber = (phone: string): string => {
 export const validateRequest = <T extends ZodSchema>(schema: T) => {
   return (req: any, res: any, next: any) => {
     try {
-      const validatedData = schema.parse(req.body) as z.infer<T>; // ✅ typed
+      const validatedData = schema.parse({
+        ...(req.body || {}),
+        ...(req.params || {}),
+        ...(req.query || {}),  // ✅ fallback so empty query doesn’t break
+      }) as z.infer<T>;
 
       // Normalize phone number if present
       if ((validatedData as any).phone) {

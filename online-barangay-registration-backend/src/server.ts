@@ -138,7 +138,6 @@ async function startServer() {
   }
 }
 
-app.use(`/api/${API_VERSION}`, routes);
 
 // Add an index response for `/api/v1`
 app.get(`/api/${API_VERSION}`, (req, res) => {
