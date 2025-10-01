@@ -2,13 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useEvents } from '../context/EventContext';
-import type { Event } from '../context/EventContext';
+import type { FrontendEvent } from '../components/events/EventCard'; // ✅ use FrontendEvent
 
 const EventsPage: React.FC = () => {
   const { events, isLoading, error, fetchEvents } = useEvents();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('upcoming');
-  const [filteredEvents, setFilteredEvents] = useState<Event[]>([]);
+  const [filteredEvents, setFilteredEvents] = useState<FrontendEvent[]>([]);
 
   useEffect(() => {
     fetchEvents({ status: statusFilter });
@@ -26,17 +26,6 @@ const EventsPage: React.FC = () => {
       setFilteredEvents(events);
     }
   }, [events, searchTerm]);
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-PH', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
 
   const getEventStatusColor = (status: string) => {
     switch (status) {
@@ -162,16 +151,19 @@ const EventsPage: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredEvents.map((event) => (
-              <div key={event.id} className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden">
+              <div
+                key={event.id}
+                className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden"
+              >
                 <div className="p-6">
                   {/* Event Status */}
                   <div className="flex justify-between items-start mb-4">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getEventStatusColor(event.status)}`}>
                       {getEventStatusText(event.status)}
                     </span>
-                    {event.registration_count && event.capacity && (
+                    {event.registeredCount && event.capacity && (
                       <span className="text-sm text-gray-500">
-                        {event.registration_count}/{event.capacity}
+                        {event.registeredCount}/{event.capacity}
                       </span>
                     )}
                   </div>
@@ -188,15 +180,12 @@ const EventsPage: React.FC = () => {
 
                   {/* Event Details */}
                   <div className="space-y-2 mb-6">
-                    {/* Date */}
                     <div className="flex items-center text-sm text-gray-500">
                       <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      {formatDate(event.start_date)}
+                      {event.date}
                     </div>
-                    
-                    {/* Location */}
                     <div className="flex items-center text-sm text-gray-500">
                       <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -204,16 +193,6 @@ const EventsPage: React.FC = () => {
                       </svg>
                       {event.location}
                     </div>
-                    
-                    {/* Age Restrictions */}
-                    {(event.age_min || event.age_max) && (
-                      <div className="flex items-center text-sm text-gray-500">
-                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        Age: {event.age_min || 0}-{event.age_max || '∞'}
-                      </div>
-                    )}
                   </div>
 
                   {/* Registration Button */}
@@ -230,8 +209,8 @@ const EventsPage: React.FC = () => {
                         disabled
                         className="flex-1 bg-gray-300 text-gray-500 text-center py-2 px-4 rounded-md cursor-not-allowed font-medium"
                       >
-                        {event.status === 'ongoing' ? 'Ongoing' : 
-                         event.status === 'completed' ? 'Tapos na' : 'Hindi available'}
+                        {event.status === 'ongoing' ? 'Ongoing' :
+                          event.status === 'completed' ? 'Tapos na' : 'Hindi available'}
                       </button>
                     )}
                   </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Search, Filter, Calendar, MapPin, Users } from 'lucide-react';
-import EventCard, { FrontendEvent } from '../components/events/EventCard';
+import EventCard from '../components/events/EventCard';
+import type { FrontendEvent } from '../components/events/EventCard';
 import EventCarousel from '../components/events/EventCarousel';
 import { mapEvent } from '../utils/eventMapper';
 import { useEvents } from '../context/EventContext';
