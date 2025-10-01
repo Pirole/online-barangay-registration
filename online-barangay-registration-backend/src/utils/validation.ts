@@ -1,10 +1,10 @@
-import { z } from 'zod';
+import { z, ZodError, ZodSchema } from "zod";
 
 // Phone number validation for Philippine format
 const phoneRegex = /^(\+63|0)9\d{9}$/;
 
 export const RegisterSchema = z.object({
-  eventId: z.string().uuid(),
+  eventId: z.string().min(1, "Event ID required"),  // instead of uuid()
   firstName: z.string().min(1, "First name required"),
   lastName: z.string().min(1, "Last name required"),
   age: z.number().int().positive(),
@@ -141,26 +141,25 @@ export const normalizePhoneNumber = (phone: string): string => {
 };
 
 // Validation middleware factory
-export const validateRequest = (schema: z.ZodSchema) => {
+
+export const validateRequest = <T extends ZodSchema>(schema: T) => {
   return (req: any, res: any, next: any) => {
     try {
-      const validatedData = schema.parse({
-        ...req.body,
-        ...req.query,
-        ...req.params,
-      }) as any;
-      
+      const validatedData = schema.parse(req.body) as z.infer<T>; // ✅ typed
+
       // Normalize phone number if present
-      if (validatedData.phone) {
-        validatedData.phone = normalizePhoneNumber(validatedData.phone);
+      if ((validatedData as any).phone) {
+        (validatedData as any).phone = normalizePhoneNumber(
+          (validatedData as any).phone
+        );
       }
-      
+
       req.validatedData = validatedData;
       next();
     } catch (error) {
-      if (error instanceof z.ZodError) {
+      if (error instanceof ZodError) {
         return res.status(400).json({
-          error: 'Validation failed',
+          error: "Validation failed",
           details: error.issues,
         });
       }
@@ -168,6 +167,7 @@ export const validateRequest = (schema: z.ZodSchema) => {
     }
   };
 };
+
 
 // Type exports for TypeScript
 export type RegisterInput = z.infer<typeof RegisterSchema>;

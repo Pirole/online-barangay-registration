@@ -33,7 +33,7 @@ const generateRefreshToken = (payload: object): string => {
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { eventId, firstName, lastName, age, address, barangay, phone, photoTempId, customValues } =
-      req.body;
+       (req as any).validatedData;  // ✅ Use validatedData
 
     if (!eventId || !firstName || !lastName) {
       throw new AppError('Missing required registration fields', 400);
