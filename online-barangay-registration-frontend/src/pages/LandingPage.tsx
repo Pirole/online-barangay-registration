@@ -1,24 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Search, Filter, Calendar, MapPin, Users } from 'lucide-react';
 import EventCard from '../components/events/EventCard';
 import type { FrontendEvent } from '../components/events/EventCard';
 import EventCarousel from '../components/events/EventCarousel';
-import { mapEvent } from '../utils/eventMapper';
 import { useEvents } from '../context/EventContext';
 
 const LandingPage: React.FC = () => {
-  const { events, isLoading, fetchEvents } = useEvents();
+  const { events, isLoading } = useEvents(); // 🚀 no fetchEvents call here
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-  useEffect(() => {
-    fetchEvents({ status: 'upcoming' }); // ✅ fetch from backend
-  }, [fetchEvents]);
-
-  // Normalize backend events into frontend type
-
-  const frontendEvents: FrontendEvent[] = events; // already mapped in context
-
+  // events are already mapped to FrontendEvent[] in context
+  const frontendEvents: FrontendEvent[] = events;
 
   // Apply search + filter
   const filteredEvents = frontendEvents.filter(event => {
