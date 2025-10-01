@@ -1,198 +1,290 @@
-import React, { useState } from 'react';
-import { Search, Filter, Calendar, MapPin, Users } from 'lucide-react';
-import EventCard from '../components/events/EventCard';
-import type { FrontendEvent } from '../components/events/EventCard';
-import EventCarousel from '../components/events/EventCarousel';
-import { useEvents } from '../context/EventContext';
+// src/pages/LandingPage.tsx
+import React, { useMemo, useRef } from "react";
+import { Search, Filter, Calendar as CalendarIcon, MapPin, Users, CalendarPlus, FileText, QrCode } from "lucide-react";
+import Header from "../components/common/Header";
+import Footer from "../components/common/Footer";
+import EventCarousel from "../components/events/EventCarousel";
+import EventCard from "../components/events/EventCard";
+import type { FrontendEvent } from "../components/events/EventCard";
+import { useEvents } from "../context/EventContext";
 
 const LandingPage: React.FC = () => {
-  const { events, isLoading } = useEvents(); // 🚀 no fetchEvents call here
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const { events, isLoading } = useEvents();
+  const eventsSectionRef = useRef<HTMLElement | null>(null);
 
-  // events are already mapped to FrontendEvent[] in context
-  const frontendEvents: FrontendEvent[] = events;
+  // We assume `events` is already mapped to FrontendEvent[] by EventContext
+  const frontendEvents: FrontendEvent[] = events || [];
 
-  // Apply search + filter
-  const filteredEvents = frontendEvents.filter(event => {
-    const matchesSearch =
-      event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory =
-      selectedCategory === 'all' || event.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  // Featured = first upcoming event (if any)
+  const featuredEvent = frontendEvents.length > 0 ? frontendEvents[0] : null;
+  const remainingEvents = frontendEvents.slice(1);
 
-  const featuredEvents = frontendEvents.slice(0, 4);
+  // Filters & search local state (kept minimal here — you can expand later)
+  // For now, just wire up the UI controlled inputs (search, category)
+  // so we leave the filtering implementation simple and client-side.
+  // (You can swap to server-side filters later by using fetchEvents with params.)
+  const filteredRemainingEvents = useMemo(() => remainingEvents, [remainingEvents]);
 
-  const handleRegisterClick = (eventId: string | number) => {
-    console.log(`Register clicked for event ${eventId}`);
-    alert(`Registration for event ${eventId} - This will redirect to the registration form`);
+  const scrollToEvents = () => {
+    // smooth scroll to events section
+    if (eventsSectionRef.current) {
+      eventsSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      // fallback: anchor fallback
+      const el = document.getElementById("events");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading events...</p>
-        </div>
-      </div>
-    );
-  }
+  const handleRegisterClick = (eventId: string | number) => {
+    // navigate in your app to registration page or open modal
+    // for now we just log — you can replace with navigate(`/register/${eventId}`)
+    console.log("Register for event:", eventId);
+    window.location.href = `/register/${eventId}`; // simple redirect for now
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Hero Section */}
-      <section className="bg-gradient-to-r from-blue-600 to-blue-800 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-          <div className="text-center">
-            <h1 className="text-4xl md:text-6xl font-bold mb-6">
-              Welcome sa Aming Barangay
-            </h1>
-            <p className="text-xl md:text-2xl mb-8 text-blue-100">
-              Register sa mga events at activities para sa buong komunidad
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button className="bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
-                View All Events
-              </button>
-              <button className="border border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition-colors">
-                Learn More
-              </button>
+    <div className="min-h-screen bg-gray-50 text-gray-800">
+      <Header />
+
+      {/* HERO */}
+      <section
+        aria-label="Hero"
+        className="pt-20 pb-12 bg-white" /* blank background per request */
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+            <div className="order-2 md:order-1">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight text-gray-900">
+                Ang Barangay Mo, <span className="text-primary-600">Online Na!</span>
+              </h1>
+              <p className="mt-4 text-lg text-gray-600">
+                Mas mabilis. Mas madali. Mag-register sa barangay events anytime, anywhere.
+              </p>
+
+              <div className="mt-6 flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={scrollToEvents}
+                  className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-gradient-to-r from-primary-600 to-primary-400 text-white font-semibold shadow hover:scale-[1.02] transition-transform"
+                >
+                  Browse Events
+                </button>
+
+                <a
+                  href="#about"
+                  className="inline-flex items-center justify-center px-6 py-3 rounded-full border border-gray-200 text-gray-700 font-medium bg-white hover:bg-gray-50 transition"
+                >
+                  Learn More
+                </a>
+              </div>
+
+              <p className="mt-4 text-sm text-gray-500">
+                <span className="font-medium">Tip:</span> Mag-register na para hindi ma-late!
+              </p>
+            </div>
+
+            {/* blank graphic placeholder */}
+            <div className="order-1 md:order-2">
+              <div className="w-full h-56 sm:h-72 md:h-64 lg:h-72 rounded-2xl bg-gradient-to-br from-primary-100 to-primary-50 border border-gray-200 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-28 h-28 rounded-full bg-white/80 flex items-center justify-center mx-auto mb-3">
+                    <span className="text-primary-600 font-bold">Logo</span>
+                  </div>
+                  <p className="text-sm text-gray-500">Barangay image placeholder</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Featured Events Carousel */}
-      <section className="py-16 bg-white">
+      {/* EVENTS SECTION */}
+      <section id="events" ref={eventsSectionRef} className="py-12 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Featured Events
-            </h2>
-            <p className="text-lg text-gray-600">
-              Mga highlighted events na pwede mong i-register ngayon
-            </p>
-          </div>
-          <EventCarousel
-            events={featuredEvents}
-            onEventRegister={handleRegisterClick}
-            autoAdvance={true}
-            autoAdvanceInterval={5000}
-          />
-        </div>
-      </section>
+          {/* Heading */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Upcoming Events</h2>
+              <p className="text-sm text-gray-600">Browse lahat ng available events sa aming barangay</p>
+            </div>
 
-      {/* Search and Filter Section */}
-      <section className="py-16 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              All Events
-            </h2>
-            <p className="text-lg text-gray-600">
-              Browse lahat ng available events sa aming barangay
-            </p>
+            {/* simple search/filter (non-server) */}
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:flex items-center bg-white border border-gray-200 rounded-full px-3 py-2">
+                <Search className="w-4 h-4 text-gray-400 mr-2" />
+                <input
+                  type="search"
+                  placeholder="Search events..."
+                  className="outline-none text-sm w-48"
+                  aria-label="Search events"
+                />
+              </div>
+
+              <div className="hidden sm:block">
+                <select className="px-3 py-2 border border-gray-200 rounded-full bg-white text-sm">
+                  <option value="all">All Categories</option>
+                  <option value="sports">Sports</option>
+                  <option value="medical">Medical</option>
+                  <option value="social">Social</option>
+                  <option value="seminar">Seminar</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
           </div>
 
-          {/* Search and Filter Controls */}
-          <div className="mb-8 flex flex-col md:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search events..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          {/* Loading state */}
+          {isLoading && (
+            <div className="py-12 flex items-center justify-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
+              <span className="ml-4 text-gray-600">Loading events...</span>
+            </div>
+          )}
+
+          {/* Featured Event (big card) */}
+          {!isLoading && featuredEvent && (
+            <div className="mb-8">
+              <div className="relative bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="grid grid-cols-1 md:grid-cols-3">
+                  {/* left: image / placeholder */}
+                  <div className="md:col-span-1">
+                    <div className="h-48 md:h-full bg-gray-100 flex items-center justify-center">
+                      {featuredEvent.imageUrl ? (
+                        <img src={featuredEvent.imageUrl} alt={featuredEvent.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                          <div className="text-center">
+                            <div className="w-20 h-20 rounded-full bg-primary-50 flex items-center justify-center mx-auto mb-2">
+                              <CalendarPlus className="w-6 h-6 text-primary-600" />
+                            </div>
+                            <p className="text-sm">Image placeholder</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* right: content */}
+                  <div className="md:col-span-2 p-6">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <span className="inline-block bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">Featured</span>
+                        <h3 className="mt-3 text-2xl font-bold text-gray-900">{featuredEvent.title}</h3>
+                        <p className="mt-2 text-sm text-gray-600 line-clamp-3">{featuredEvent.description}</p>
+
+                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-gray-600">
+                          <div className="flex items-center">
+                            <CalendarIcon className="w-4 h-4 mr-2 text-gray-400" />
+                            <span>{featuredEvent.date} • {featuredEvent.time}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <MapPin className="w-4 h-4 mr-2 text-gray-400" />
+                            <span className="truncate">{featuredEvent.location}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <Users className="w-4 h-4 mr-2 text-gray-400" />
+                            <span>{featuredEvent.registeredCount} / {featuredEvent.capacity} registered</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="hidden md:flex md:items-center md:gap-3">
+                        <button
+                          onClick={() => handleRegisterClick(featuredEvent.id)}
+                          className="px-5 py-3 rounded-full bg-primary-600 text-white font-semibold hover:shadow-lg transition"
+                        >
+                          Register Now
+                        </button>
+                        <button
+                          onClick={() => console.log("View details", featuredEvent.id)}
+                          className="px-4 py-2 rounded-full border border-gray-200 text-sm text-gray-700 bg-white hover:bg-gray-50"
+                        >
+                          View Details
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* mobile actions */}
+                    <div className="mt-6 md:hidden flex gap-3">
+                      <button
+                        onClick={() => handleRegisterClick(featuredEvent.id)}
+                        className="flex-1 px-4 py-3 rounded-lg bg-primary-600 text-white font-semibold"
+                      >
+                        Register Now
+                      </button>
+                      <button
+                        onClick={() => console.log("View details", featuredEvent.id)}
+                        className="flex-1 px-4 py-3 rounded-lg border border-gray-200 bg-white text-sm"
+                      >
+                        View Details
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Carousel (remaining events) */}
+          {!isLoading && (
+            <div className="mb-12">
+              <EventCarousel
+                events={filteredRemainingEvents as any} // cast to match carousel prop type
+                onEventRegister={handleRegisterClick}
+                autoAdvance={true}
+                autoAdvanceInterval={6000}
               />
             </div>
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="pl-10 pr-8 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white min-w-[200px]"
-              >
-                <option value="all">All Categories</option>
-                <option value="sports">Sports</option>
-                <option value="medical">Medical</option>
-                <option value="social">Social</option>
-                <option value="seminar">Seminar</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-          </div>
+          )}
 
-          {/* Events Grid */}
-          {filteredEvents.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {filteredEvents.map(event => (
-                <EventCard
-                  key={event.id}
-                  event={event}
-                  onRegisterClick={handleRegisterClick}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-16">
-              <div className="text-gray-400 mb-4">
-                <Calendar className="w-16 h-16 mx-auto" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                No events found
-              </h3>
-              <p className="text-gray-600">
-                Try adjusting your search or filter criteria
-              </p>
+          {/* No events fallback */}
+          {!isLoading && frontendEvents.length === 0 && (
+            <div className="py-12 text-center text-gray-500">
+              <CalendarIcon className="mx-auto w-12 h-12 mb-4" />
+              <h3 className="text-lg font-semibold">Walang naka-schedule na events ngayon</h3>
+              <p className="mt-2">Check back later or contact the barangay office for more info.</p>
             </div>
           )}
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
+      {/* HOW IT WORKS */}
+      <section aria-label="How it works" className="py-12 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div>
-              <h3 className="text-xl font-bold mb-4">
-                Barangay Registration System
-              </h3>
-              <p className="text-gray-400">
-                Simple at secure na paraan para mag-register sa mga barangay events.
-              </p>
-            </div>
-            <div>
-              <h3 className="text-xl font-bold mb-4">Contact Info</h3>
-              <div className="space-y-2 text-gray-400">
-                <div className="flex items-center">
-                  <MapPin className="w-4 h-4 mr-2" />
-                  <span>Barangay Hall, Local Address</span>
-                </div>
-                <div className="flex items-center">
-                  <Users className="w-4 h-4 mr-2" />
-                  <span>+63 XXX XXX XXXX</span>
-                </div>
-              </div>
-            </div>
-            <div>
-              <h3 className="text-xl font-bold mb-4">Quick Links</h3>
-              <ul className="space-y-2 text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">About Us</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Events</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Privacy Policy</a></li>
-              </ul>
-            </div>
+          <div className="text-center mb-8">
+            <h2 className="text-2xl md:text-3xl font-bold">Paano Mag-register</h2>
+            <p className="text-sm text-gray-600 mt-2">Simple lang: Pili ng event, mag-register, at ipakita ang QR sa araw ng activity.</p>
           </div>
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 Barangay Registration System. All rights reserved.</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 items-start">
+            <div className="flex flex-col items-center text-center p-6 bg-gray-50 rounded-xl border border-gray-100">
+              <div className="w-16 h-16 rounded-full bg-primary-50 flex items-center justify-center mb-4">
+                <CalendarIcon className="w-7 h-7 text-primary-600" />
+              </div>
+              <h4 className="font-semibold">Pili ng Event</h4>
+              <p className="text-sm text-gray-600 mt-2">Hanapin ang gusto mong salihan — may categories para madali.</p>
+            </div>
+
+            <div className="flex flex-col items-center text-center p-6 bg-gray-50 rounded-xl border border-gray-100">
+              <div className="w-16 h-16 rounded-full bg-primary-50 flex items-center justify-center mb-4">
+                <FileText className="w-7 h-7 text-primary-600" />
+              </div>
+              <h4 className="font-semibold">Mag-register</h4>
+              <p className="text-sm text-gray-600 mt-2">I-fill up ang form, mag-upload ng photo at i-verify gamit ang OTP.</p>
+            </div>
+
+            <div className="flex flex-col items-center text-center p-6 bg-gray-50 rounded-xl border border-gray-100">
+              <div className="w-16 h-16 rounded-full bg-primary-50 flex items-center justify-center mb-4">
+                <QrCode className="w-7 h-7 text-primary-600" />
+              </div>
+              <h4 className="font-semibold">Makakuha ng QR</h4>
+              <p className="text-sm text-gray-600 mt-2">Idownload ang QR at ipakita sa registration desk sa araw ng event.</p>
+            </div>
           </div>
         </div>
-      </footer>
+      </section>
+
+      <Footer />
     </div>
   );
 };
