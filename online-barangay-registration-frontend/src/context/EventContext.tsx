@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { mapEvent } from '../utils/eventMapper';
 
-const API_BASE = "http://localhost:5000/api";
+const API_BASE = "http://localhost:5000/api"; // Replace with your backend URL
 export interface CustomField {
   key: string;
   label: string;
@@ -95,11 +95,11 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
 
-    const response = await fetch(`${API_BASE}/events?${queryParams.toString()}`);
+    const response = await fetch(`${API_BASE}/v1/events`);
     if (!response.ok) throw new Error('Failed to fetch events');
 
     const data = await response.json();
-    setEvents((data.data || data.events || data).map(mapEvent)); // ✅ normalize here
+    setEvents((data.data || []).map(mapEvent)); // ✅ normalize here
   } catch (err) {
     setError(err instanceof Error ? err.message : 'Failed to fetch events');
   } finally {
@@ -111,7 +111,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/events/${id}`);
+      const response = await fetch(`/api/v1/events/${id}`);
       if (!response.ok) throw new Error('Failed to fetch event');
 
       const event = await response.json();
