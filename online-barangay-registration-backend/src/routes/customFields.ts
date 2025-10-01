@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { validateRequest } from '../middleware/validateRequest';
 import * as cfController from '../controllers/customFields';
+import { validateRequest } from '../utils/validation';
 import { authenticateToken, authorize } from '../middleware/auth';
 import { z } from 'zod';
 

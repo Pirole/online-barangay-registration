@@ -1,7 +1,6 @@
 import { Router } from 'express';
-import { validateRequest } from '../middleware/validateRequest';
 import * as eventsController from '../controllers/events';
-import { CreateEventSchema, UpdateEventSchema, QueryEventsSchema } from '../utils/validation';
+import { CreateEventSchema, UpdateEventSchema, QueryEventsSchema, validateRequest } from '../utils/validation';
 import { authenticateToken, authorize, optionalAuth } from '../middleware/auth';
 
 const router = Router();

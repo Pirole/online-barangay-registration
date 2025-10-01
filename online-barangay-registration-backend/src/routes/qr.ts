@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { validateRequest } from '../middleware/validateRequest';
 import * as qrController from '../controllers/qr';
+import { validateRequest } from '../utils/validation';
 import { ScanQRSchema } from '../utils/validation';
 import { authenticateToken, authorize } from '../middleware/auth';
 

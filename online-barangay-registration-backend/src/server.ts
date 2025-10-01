@@ -20,8 +20,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 const API_VERSION = process.env.API_VERSION || 'v1';
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 // ================================================
 // MIDDLEWARE SETUP
 // ================================================
@@ -88,20 +87,9 @@ app.get('/health/db', async (req, res) => {
 // ================================================
 // AUTOLOAD ROUTES
 // ================================================
-const apiRouter = express.Router();
-const routesPath = path.join(__dirname, 'routes');
-console.log('Routes path:', routesPath);
 
-fs.readdirSync(routesPath).forEach((file) => {
-  if (file.endsWith('.ts') || file.endsWith('.js')) {
-    const route = require(path.join(routesPath, file)).default;
-    const routeName = `/${file.replace(/\.(ts|js)$/, '')}`;
-    apiRouter.use(routeName, route);
-    logger.info(`✅ Route loaded: /api/${API_VERSION}${routeName}`);
-  }
-});
 
-app.use(`/api/${API_VERSION}`, apiRouter);
+app.use(`/api/${API_VERSION}`, routes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -150,7 +138,7 @@ async function startServer() {
   }
 }
 
-app.use(`/api/${API_VERSION}`, apiRouter);
+app.use(`/api/${API_VERSION}`, routes);
 
 // Add an index response for `/api/v1`
 app.get(`/api/${API_VERSION}`, (req, res) => {

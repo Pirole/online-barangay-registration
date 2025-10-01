@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { validateRequest } from '../middleware/validateRequest';
+import { validateRequest } from '../utils/validation';
 import * as otpController from '../controllers/otp';
 import { OTPVerifySchema } from '../utils/validation';
 import { authenticateToken } from '../middleware/auth';

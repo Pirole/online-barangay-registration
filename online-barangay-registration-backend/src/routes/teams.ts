@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { validateRequest } from '../middleware/validateRequest';
+import { validateRequest } from '../utils/validation';
 import * as teamsController from '../controllers/teams';
 import { authenticateToken, authorize } from '../middleware/auth';
 import { z } from 'zod';

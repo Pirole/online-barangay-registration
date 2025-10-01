@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { validateRequest } from '../middleware/validateRequest';
+import { validateRequest } from '../utils/validation';
 import * as registrationsController from '../controllers/registrations';
 import { RegisterSchema, QueryRegistrantsSchema, ApprovalSchema } from '../utils/validation';
 import { authenticateToken, authorize, optionalAuth } from '../middleware/auth';
