@@ -2,7 +2,7 @@ import React from 'react';
 import { Calendar, MapPin, Users, Clock } from 'lucide-react';
 
 // Export the Event type so other components can use it
-export interface Event {
+export interface FrontendEvent {
   id: string | number; // ✅ allow UUIDs from backend
   title: string;
   description: string;
@@ -25,13 +25,11 @@ export interface Event {
   }>;
 }
 
-
 interface EventCardProps {
-  event: Event;
-  onRegisterClick?: (eventId: string | number) => void; // ✅ updated
+  event: FrontendEvent;
+  onRegisterClick?: (eventId: string | number) => void;
   compact?: boolean;
 }
-
 
 const EventCard: React.FC<EventCardProps> = ({ 
   event, 
@@ -47,7 +45,7 @@ const EventCard: React.FC<EventCardProps> = ({
     });
   };
 
-  const getStatusColor = (status: Event['status']) => {
+  const getStatusColor = (status: FrontendEvent['status']) => {
     switch (status) {
       case 'upcoming':
         return 'bg-green-100 text-green-800 border-green-200';
@@ -62,7 +60,7 @@ const EventCard: React.FC<EventCardProps> = ({
     }
   };
 
-  const getCategoryColor = (category: Event['category']) => {
+  const getCategoryColor = (category: FrontendEvent['category']) => {
     switch (category) {
       case 'sports':
         return 'bg-orange-100 text-orange-800';
@@ -157,7 +155,7 @@ const EventCard: React.FC<EventCardProps> = ({
         <div className="flex flex-col space-y-2">
           {isRegistrationOpen ? (
           <button
-            onClick={() => onRegisterClick?.(event.id)} // ✅ now works for both string & number
+            onClick={() => onRegisterClick?.(event.id)} 
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
             Register Now

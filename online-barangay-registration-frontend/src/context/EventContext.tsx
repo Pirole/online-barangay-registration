@@ -1,18 +1,29 @@
 // src/context/EventContext.tsx
-import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { mapEvent } from '../utils/eventMapper';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  type ReactNode,
+} from "react";
+import { mapEvent } from "../utils/eventMapper";
 
-const API_BASE = "http://localhost:5000/api"; // Replace with your backend URL
+// ✅ Central API base (adjust if you deploy)
+const API_BASE = "http://localhost:5000/api/v1";
+
+/* =====================
+   Interfaces
+   ===================== */
 export interface CustomField {
   key: string;
   label: string;
-  type: 'text' | 'number' | 'select' | 'checkbox' | 'textarea';
+  type: "text" | "number" | "select" | "checkbox" | "textarea";
   required: boolean;
-  validation?: string; // regex pattern
-  options?: string[]; // for select type
+  validation?: string;
+  options?: string[];
 }
 
-export interface Event {
+export interface BackendEvent {
   id: string;
   title: string;
   description: string;
@@ -25,7 +36,7 @@ export interface Event {
   custom_fields: CustomField[];
   manager_id: string;
   allow_autocheckin: boolean;
-  status: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
+  status: "upcoming" | "ongoing" | "completed" | "cancelled";
   created_at: string;
   updated_at: string;
   registration_count?: number;
@@ -41,42 +52,57 @@ export interface Registrant {
   barangay: string;
   photo_path?: string;
   custom_field_values: Record<string, any>;
-  status: 'pending' | 'approved' | 'rejected' | 'flagged';
+  status: "pending" | "approved" | "rejected" | "flagged";
   qr_value?: string;
   qr_image_path?: string;
   created_at: string;
   rejection_reason?: string;
 }
 
+/* =====================
+   Context Type
+   ===================== */
 interface EventContextType {
   events: Event[];
   selectedEvent: Event | null;
   registrants: Registrant[];
   isLoading: boolean;
   error: string | null;
+
   // Event methods
-  fetchEvents: (params?: { status?: string; search?: string; page?: number; limit?: number }) => Promise<void>;
+  fetchEvents: (
+    params?: { status?: string; search?: string; page?: number; limit?: number }
+  ) => Promise<void>;
   fetchEventById: (id: string) => Promise<Event | null>;
   createEvent: (eventData: Partial<Event>) => Promise<Event>;
   updateEvent: (id: string, eventData: Partial<Event>) => Promise<Event>;
   deleteEvent: (id: string) => Promise<void>;
+
   // Registrant methods
-  fetchRegistrants: (eventId: string, params?: { status?: string }) => Promise<void>;
-  registerForEvent: (eventId: string, registrationData: any) => Promise<Registrant>;
+  fetchRegistrants: (
+    eventId: string,
+    params?: { status?: string }
+  ) => Promise<void>;
+  registerForEvent: (
+    eventId: string,
+    registrationData: any
+  ) => Promise<Registrant>;
   approveRegistrant: (registrantId: string) => Promise<void>;
   rejectRegistrant: (registrantId: string, reason: string) => Promise<void>;
-  // Utility methods
+
+  // Utility
   clearError: () => void;
   setSelectedEvent: (event: Event | null) => void;
 }
 
 const EventContext = createContext<EventContextType | undefined>(undefined);
 
-interface EventProviderProps {
-  children: ReactNode;
-}
-
-export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
+/* =====================
+   Provider
+   ===================== */
+export const EventProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [registrants, setRegistrants] = useState<Registrant[]>([]);
@@ -85,40 +111,44 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
 
   const clearError = () => setError(null);
 
-  const fetchEvents = async (params?: { status?: string; search?: string; page?: number; limit?: number }) => {
-  setIsLoading(true);
-  setError(null);
-  try {
-    const queryParams = new URLSearchParams();
-    if (params?.status) queryParams.append('status', params.status);
-    if (params?.search) queryParams.append('search', params.search);
-    if (params?.page) queryParams.append('page', params.page.toString());
-    if (params?.limit) queryParams.append('limit', params.limit.toString());
+  /* ---------- EVENTS ---------- */
+  const fetchEvents = async (
+    params?: { status?: string; search?: string; page?: number; limit?: number }
+  ) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const queryParams = new URLSearchParams();
+      if (params?.status) queryParams.append("status", params.status);
+      if (params?.search) queryParams.append("search", params.search);
+      if (params?.page) queryParams.append("page", params.page.toString());
+      if (params?.limit) queryParams.append("limit", params.limit.toString());
 
-    const response = await fetch(`${API_BASE}/v1/events`);
-    if (!response.ok) throw new Error('Failed to fetch events');
+      const response = await fetch(`${API_BASE}/events?${queryParams}`);
+      if (!response.ok) throw new Error("Failed to fetch events");
 
-    const data = await response.json();
-    setEvents((data.data || []).map(mapEvent)); // ✅ normalize here
-  } catch (err) {
-    setError(err instanceof Error ? err.message : 'Failed to fetch events');
-  } finally {
-    setIsLoading(false);
-  }
-};
+      const data = await response.json();
+      setEvents((data.data || []).map(mapEvent));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch events");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const fetchEventById = async (id: string): Promise<Event | null> => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/v1/events/${id}`);
-      if (!response.ok) throw new Error('Failed to fetch event');
+      const response = await fetch(`${API_BASE}/events/${id}`);
+      if (!response.ok) throw new Error("Failed to fetch event");
 
-      const event = await response.json();
+      const data = await response.json();
+      const event = mapEvent(data.data);
       setSelectedEvent(event);
       return event;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch event');
+      setError(err instanceof Error ? err.message : "Failed to fetch event");
       return null;
     } finally {
       setIsLoading(false);
@@ -129,52 +159,60 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/events', {
-        method: 'POST',
+      const response = await fetch(`${API_BASE}/events`, {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
         },
         body: JSON.stringify(eventData),
       });
 
-      if (!response.ok) throw new Error('Failed to create event');
+      if (!response.ok) throw new Error("Failed to create event");
 
-      const newEvent = await response.json();
-      setEvents(prev => [...prev, newEvent]);
+      const data = await response.json();
+      const newEvent = mapEvent(data.data);
+      setEvents((prev) => [...prev, newEvent]);
       return newEvent;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create event';
-      setError(message);
-      throw new Error(message);
+      const msg = err instanceof Error ? err.message : "Failed to create event";
+      setError(msg);
+      throw new Error(msg);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const updateEvent = async (id: string, eventData: Partial<Event>): Promise<Event> => {
+  const updateEvent = async (
+    id: string,
+    eventData: Partial<Event>
+  ): Promise<Event> => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/events/${id}`, {
-        method: 'PUT',
+      const response = await fetch(`${API_BASE}/events/${id}`, {
+        method: "PATCH",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
         },
         body: JSON.stringify(eventData),
       });
 
-      if (!response.ok) throw new Error('Failed to update event');
+      if (!response.ok) throw new Error("Failed to update event");
 
-      const updatedEvent = await response.json();
-      setEvents(prev => prev.map(event => event.id === id ? updatedEvent : event));
+      const data = await response.json();
+      const updatedEvent = mapEvent(data.data);
+
+      setEvents((prev) =>
+        prev.map((e) => (e.id === id ? updatedEvent : e))
+      );
       if (selectedEvent?.id === id) setSelectedEvent(updatedEvent);
       return updatedEvent;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update event';
-      setError(message);
-      throw new Error(message);
+      const msg = err instanceof Error ? err.message : "Failed to update event";
+      setError(msg);
+      throw new Error(msg);
     } finally {
       setIsLoading(false);
     }
@@ -184,73 +222,83 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/events/${id}`, {
-        method: 'DELETE',
+      const response = await fetch(`${API_BASE}/events/${id}`, {
+        method: "DELETE",
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
         },
       });
 
-      if (!response.ok) throw new Error('Failed to delete event');
+      if (!response.ok) throw new Error("Failed to delete event");
 
-      setEvents(prev => prev.filter(event => event.id !== id));
+      setEvents((prev) => prev.filter((e) => e.id !== id));
       if (selectedEvent?.id === id) setSelectedEvent(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete event';
-      setError(message);
-      throw new Error(message);
+      const msg = err instanceof Error ? err.message : "Failed to delete event";
+      setError(msg);
+      throw new Error(msg);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const fetchRegistrants = async (eventId: string, params?: { status?: string }) => {
+  /* ---------- REGISTRANTS ---------- */
+  const fetchRegistrants = async (
+    eventId: string,
+    params?: { status?: string }
+  ) => {
     setIsLoading(true);
     setError(null);
     try {
       const queryParams = new URLSearchParams();
-      if (params?.status) queryParams.append('status', params.status);
+      if (params?.status) queryParams.append("status", params.status);
 
-      const response = await fetch(`/api/events/${eventId}/registrants?${queryParams.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-        },
-      });
+      const response = await fetch(
+        `${API_BASE}/events/${eventId}/registrants?${queryParams}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
+          },
+        }
+      );
 
-      if (!response.ok) throw new Error('Failed to fetch registrants');
+      if (!response.ok) throw new Error("Failed to fetch registrants");
 
       const data = await response.json();
-      setRegistrants(data.registrants || data);
+      setRegistrants(data.data || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch registrants');
+      setError(
+        err instanceof Error ? err.message : "Failed to fetch registrants"
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
-  const registerForEvent = async (eventId: string, registrationData: any): Promise<Registrant> => {
+  const registerForEvent = async (
+    eventId: string,
+    registrationData: any
+  ): Promise<Registrant> => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/events/${eventId}/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const response = await fetch(`${API_BASE}/events/${eventId}/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(registrationData),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Registration failed');
+        const errData = await response.json();
+        throw new Error(errData.message || "Registration failed");
       }
 
-      const registrant = await response.json();
-      return registrant;
+      const data = await response.json();
+      return data.data;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Registration failed';
-      setError(message);
-      throw new Error(message);
+      const msg = err instanceof Error ? err.message : "Registration failed";
+      setError(msg);
+      throw new Error(msg);
     } finally {
       setIsLoading(false);
     }
@@ -260,57 +308,74 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/registrants/${registrantId}/approve`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-        },
-      });
+      const response = await fetch(
+        `${API_BASE}/registrants/${registrantId}/approve`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
+          },
+        }
+      );
 
-      if (!response.ok) throw new Error('Failed to approve registrant');
+      if (!response.ok) throw new Error("Failed to approve registrant");
 
-      setRegistrants(prev => prev.map(r => 
-        r.id === registrantId ? { ...r, status: 'approved' } : r
-      ));
+      setRegistrants((prev) =>
+        prev.map((r) =>
+          r.id === registrantId ? { ...r, status: "approved" } : r
+        )
+      );
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to approve registrant';
-      setError(message);
-      throw new Error(message);
+      const msg =
+        err instanceof Error ? err.message : "Failed to approve registrant";
+      setError(msg);
+      throw new Error(msg);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const rejectRegistrant = async (registrantId: string, reason: string): Promise<void> => {
+  const rejectRegistrant = async (
+    registrantId: string,
+    reason: string
+  ): Promise<void> => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/registrants/${registrantId}/reject`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-        },
-        body: JSON.stringify({ reason }),
-      });
+      const response = await fetch(
+        `${API_BASE}/registrants/${registrantId}/reject`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
+          },
+          body: JSON.stringify({ reason }),
+        }
+      );
 
-      if (!response.ok) throw new Error('Failed to reject registrant');
+      if (!response.ok) throw new Error("Failed to reject registrant");
 
-      setRegistrants(prev => prev.map(r => 
-        r.id === registrantId ? { ...r, status: 'rejected', rejection_reason: reason } : r
-      ));
+      setRegistrants((prev) =>
+        prev.map((r) =>
+          r.id === registrantId
+            ? { ...r, status: "rejected", rejection_reason: reason }
+            : r
+        )
+      );
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to reject registrant';
-      setError(message);
-      throw new Error(message);
+      const msg =
+        err instanceof Error ? err.message : "Failed to reject registrant";
+      setError(msg);
+      throw new Error(msg);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Initial load of events
+  /* ---------- AUTO FETCH ---------- */
   useEffect(() => {
-    fetchEvents({ status: 'upcoming' });
+    fetchEvents({ status: "upcoming" });
   }, []);
 
   const value: EventContextType = {
@@ -333,16 +398,17 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   };
 
   return (
-    <EventContext.Provider value={value}>
-      {children}
-    </EventContext.Provider>
+    <EventContext.Provider value={value}>{children}</EventContext.Provider>
   );
 };
 
+/* =====================
+   Hook
+   ===================== */
 export const useEvents = (): EventContextType => {
   const context = useContext(EventContext);
-  if (context === undefined) {
-    throw new Error('useEvents must be used within an EventProvider');
+  if (!context) {
+    throw new Error("useEvents must be used within an EventProvider");
   }
   return context;
 };
