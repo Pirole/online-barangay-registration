@@ -61,9 +61,6 @@ const Header: React.FC<HeaderProps> = ({ className = '' }) => {
             <a href="#events" className="block text-gray-700 hover:text-blue-600">Events</a>
             <a href="#about" className="block text-gray-700 hover:text-blue-600">About</a>
             <a href="#contact" className="block text-gray-700 hover:text-blue-600">Contact</a>
-            <button className="w-full bg-gradient-to-r from-blue-600 to-red-500 text-white py-3 rounded-full">
-              Register for Events
-            </button>
           </div>
         </div>
       )}
