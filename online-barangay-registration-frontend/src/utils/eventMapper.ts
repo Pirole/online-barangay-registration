@@ -1,20 +1,32 @@
-import type { Event as BackendEvent } from '../context/EventContext';
-import type { Event as FrontendEvent } from '../components/events/EventCard';
+import type { BackendEvent } from '../context/EventContext';
+import type { FrontendEvent } from '../components/events/EventCard';
 
 export function mapEvent(be: BackendEvent): FrontendEvent {
-  const startDate = new Date(be.start_date);
+  let startDate: Date | null = null;
+
+  // ✅ Safely parse start_date
+  if (be.start_date) {
+    const parsed = new Date(be.start_date);
+    if (!isNaN(parsed.getTime())) {
+      startDate = parsed;
+    }
+  }
 
   return {
-    id: be.id, // ✅ keep as string (UUID) or number
+    id: be.id,
     title: be.title,
     description: be.description || '',
-    date: startDate.toISOString().split('T')[0], // yyyy-mm-dd
-    time: startDate.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }),
+    date: startDate
+      ? startDate.toISOString().split('T')[0] // yyyy-mm-dd
+      : 'TBA',
+    time: startDate
+      ? startDate.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })
+      : '',
     location: be.location,
     capacity: be.capacity ?? 0,
-    registeredCount: (be as any).registration_count ?? 0, // ✅ backend may not provide yet
-    category: 'other', // fallback until backend sends category
-    status: (be as any).status ?? 'upcoming', // ✅ fallback if backend doesn't send
-    imageUrl: '/placeholder.png', // fallback image
+    registeredCount: be.registration_count ?? 0,
+    category: 'other', // fallback until backend provides
+    status: be.status ?? 'upcoming', // fallback if backend doesn't send
+    imageUrl: '/placeholder.png',
   };
 }

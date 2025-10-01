@@ -7,8 +7,9 @@ import React, {
   type ReactNode,
 } from "react";
 import { mapEvent } from "../utils/eventMapper";
+import type { FrontendEvent } from "../components/events/EventCard"; // ✅ import proper type
 
-// ✅ Central API base (adjust if you deploy)
+// ✅ Central API base
 const API_BASE = "http://localhost:5000/api/v1";
 
 /* =====================
@@ -63,8 +64,8 @@ export interface Registrant {
    Context Type
    ===================== */
 interface EventContextType {
-  events: Event[];
-  selectedEvent: Event | null;
+  events: FrontendEvent[];
+  selectedEvent: FrontendEvent | null;
   registrants: Registrant[];
   isLoading: boolean;
   error: string | null;
@@ -73,9 +74,12 @@ interface EventContextType {
   fetchEvents: (
     params?: { status?: string; search?: string; page?: number; limit?: number }
   ) => Promise<void>;
-  fetchEventById: (id: string) => Promise<Event | null>;
-  createEvent: (eventData: Partial<Event>) => Promise<Event>;
-  updateEvent: (id: string, eventData: Partial<Event>) => Promise<Event>;
+  fetchEventById: (id: string) => Promise<FrontendEvent | null>;
+  createEvent: (eventData: Partial<FrontendEvent>) => Promise<FrontendEvent>;
+  updateEvent: (
+    id: string,
+    eventData: Partial<FrontendEvent>
+  ) => Promise<FrontendEvent>;
   deleteEvent: (id: string) => Promise<void>;
 
   // Registrant methods
@@ -92,7 +96,7 @@ interface EventContextType {
 
   // Utility
   clearError: () => void;
-  setSelectedEvent: (event: Event | null) => void;
+  setSelectedEvent: (event: FrontendEvent | null) => void;
 }
 
 const EventContext = createContext<EventContextType | undefined>(undefined);
@@ -103,8 +107,8 @@ const EventContext = createContext<EventContextType | undefined>(undefined);
 export const EventProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const [events, setEvents] = useState<Event[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [events, setEvents] = useState<FrontendEvent[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<FrontendEvent | null>(null);
   const [registrants, setRegistrants] = useState<Registrant[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,7 +140,7 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({
     }
   };
 
-  const fetchEventById = async (id: string): Promise<Event | null> => {
+  const fetchEventById = async (id: string): Promise<FrontendEvent | null> => {
     setIsLoading(true);
     setError(null);
     try {
@@ -155,7 +159,9 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({
     }
   };
 
-  const createEvent = async (eventData: Partial<Event>): Promise<Event> => {
+  const createEvent = async (
+    eventData: Partial<FrontendEvent>
+  ): Promise<FrontendEvent> => {
     setIsLoading(true);
     setError(null);
     try {
@@ -185,8 +191,8 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({
 
   const updateEvent = async (
     id: string,
-    eventData: Partial<Event>
-  ): Promise<Event> => {
+    eventData: Partial<FrontendEvent>
+  ): Promise<FrontendEvent> => {
     setIsLoading(true);
     setError(null);
     try {

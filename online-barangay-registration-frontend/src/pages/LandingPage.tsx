@@ -16,7 +16,9 @@ const LandingPage: React.FC = () => {
   }, [fetchEvents]);
 
   // Normalize backend events into frontend type
-  const frontendEvents: FrontendEvent[] = events.map(mapEvent);
+
+  const frontendEvents: FrontendEvent[] = events; // already mapped in context
+
 
   // Apply search + filter
   const filteredEvents = frontendEvents.filter(event => {
