@@ -4,7 +4,7 @@ import EventCard, { type Event } from './EventCard';
 
 interface EventCarouselProps {
   events: Event[];
-  onEventRegister?: (eventId: number) => void;
+  onEventRegister?: (eventId: string | number) => void; // ✅ updated type
   autoAdvance?: boolean;
   autoAdvanceInterval?: number;
 }

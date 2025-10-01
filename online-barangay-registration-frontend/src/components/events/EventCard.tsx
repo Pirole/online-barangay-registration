@@ -3,7 +3,7 @@ import { Calendar, MapPin, Users, Clock } from 'lucide-react';
 
 // Export the Event type so other components can use it
 export interface Event {
-  id: number;
+  id: string | number; // ✅ allow UUIDs from backend
   title: string;
   description: string;
   date: string;
@@ -25,11 +25,13 @@ export interface Event {
   }>;
 }
 
+
 interface EventCardProps {
   event: Event;
-  onRegisterClick?: (eventId: number) => void;
+  onRegisterClick?: (eventId: string | number) => void; // ✅ updated
   compact?: boolean;
 }
+
 
 const EventCard: React.FC<EventCardProps> = ({ 
   event, 
@@ -154,12 +156,13 @@ const EventCard: React.FC<EventCardProps> = ({
         {/* Registration Button */}
         <div className="flex flex-col space-y-2">
           {isRegistrationOpen ? (
-            <button
-              onClick={() => onRegisterClick?.(event.id)}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Register Now
-            </button>
+          <button
+            onClick={() => onRegisterClick?.(event.id)} // ✅ now works for both string & number
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          >
+            Register Now
+          </button>
+
           ) : (
             <button
               disabled
