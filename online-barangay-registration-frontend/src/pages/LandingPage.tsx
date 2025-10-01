@@ -1,30 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import { Search, Filter, Calendar, MapPin, Users } from 'lucide-react';
 import EventCard, { type Event as FrontendEvent } from '../components/events/EventCard';
 import EventCarousel from '../components/events/EventCarousel';
 import { mapEvent } from '../utils/eventMapper';
 import { useEvents } from '../context/EventContext';
-
-const fetched = await axios.get("http://localhost:5000/api/events");
-setEvents(fetched.data.data.map(mapEvent));
-// Helper: map backend event -> frontend event
-function mapEvent(be: any): FrontendEvent {
-  const start = new Date(be.start_date);
-  return {
-    id: be.id, // keep string id (EventCard accepts string now)
-    title: be.title,
-    description: be.description || '',
-    date: start.toISOString().split('T')[0],
-    time: start.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }),
-    location: be.location,
-    capacity: be.capacity ?? 0,
-    registeredCount: be.registration_count ?? 0,
-    category: 'other', // backend doesn’t return category yet
-    status: be.status ?? 'upcoming',
-    imageUrl: '/placeholder.png', // backend doesn’t return image yet
-  };
-}
 
 const LandingPage: React.FC = () => {
   const { events, isLoading, fetchEvents } = useEvents();
@@ -32,12 +11,13 @@ const LandingPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   useEffect(() => {
-    fetchEvents({ status: 'upcoming' }); // fetch from backend
+    fetchEvents({ status: 'upcoming' }); // ✅ fetch from backend
   }, [fetchEvents]);
 
-  // Map + filter
+  // Normalize backend events into frontend type
   const frontendEvents: FrontendEvent[] = events.map(mapEvent);
 
+  // Apply search + filter
   const filteredEvents = frontendEvents.filter(event => {
     const matchesSearch =
       event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -52,7 +32,6 @@ const LandingPage: React.FC = () => {
   const handleRegisterClick = (eventId: string | number) => {
     console.log(`Register clicked for event ${eventId}`);
     alert(`Registration for event ${eventId} - This will redirect to the registration form`);
-    
   };
 
   if (isLoading) {

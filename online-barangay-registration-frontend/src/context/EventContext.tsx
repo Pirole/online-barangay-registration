@@ -1,6 +1,8 @@
 // src/context/EventContext.tsx
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { mapEvent } from '../utils/eventMapper';
 
+const API_BASE = "http://localhost:5000/api";
 export interface CustomField {
   key: string;
   label: string;
@@ -84,26 +86,26 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   const clearError = () => setError(null);
 
   const fetchEvents = async (params?: { status?: string; search?: string; page?: number; limit?: number }) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const queryParams = new URLSearchParams();
-      if (params?.status) queryParams.append('status', params.status);
-      if (params?.search) queryParams.append('search', params.search);
-      if (params?.page) queryParams.append('page', params.page.toString());
-      if (params?.limit) queryParams.append('limit', params.limit.toString());
+  setIsLoading(true);
+  setError(null);
+  try {
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
 
-      const response = await fetch(`/api/events?${queryParams.toString()}`);
-      if (!response.ok) throw new Error('Failed to fetch events');
+    const response = await fetch(`${API_BASE}/events?${queryParams.toString()}`);
+    if (!response.ok) throw new Error('Failed to fetch events');
 
-      const data = await response.json();
-      setEvents(data.events || data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch events');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const data = await response.json();
+    setEvents((data.data || data.events || data).map(mapEvent)); // ✅ normalize here
+  } catch (err) {
+    setError(err instanceof Error ? err.message : 'Failed to fetch events');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const fetchEventById = async (id: string): Promise<Event | null> => {
     setIsLoading(true);
