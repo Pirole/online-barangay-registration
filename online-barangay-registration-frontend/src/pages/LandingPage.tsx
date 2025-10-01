@@ -1,113 +1,56 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, Filter, Calendar, MapPin, Users } from 'lucide-react';
-import EventCard, { type Event } from '../components/events/EventCard';
+import EventCard, { type Event as FrontendEvent } from '../components/events/EventCard';
 import EventCarousel from '../components/events/EventCarousel';
+import { useEvents } from '../context/EventContext';
+
+// Helper: map backend event -> frontend event
+function mapEvent(be: any): FrontendEvent {
+  const start = new Date(be.start_date);
+  return {
+    id: be.id, // keep string id (EventCard accepts string now)
+    title: be.title,
+    description: be.description || '',
+    date: start.toISOString().split('T')[0],
+    time: start.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }),
+    location: be.location,
+    capacity: be.capacity ?? 0,
+    registeredCount: be.registration_count ?? 0,
+    category: 'other', // backend doesn’t return category yet
+    status: be.status ?? 'upcoming',
+    imageUrl: '/placeholder.png', // backend doesn’t return image yet
+  };
+}
 
 const LandingPage: React.FC = () => {
-  const [events, setEvents] = useState<Event[]>([]);
+  const { events, isLoading, fetchEvents } = useEvents();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [loading, setLoading] = useState(true);
 
-  // Mock data for testing - replace with actual API call later
   useEffect(() => {
-    const mockEvents: Event[] = [
-      {
-        id: 1,
-        title: 'Barangay Basketball Tournament',
-        description: 'Annual basketball tournament open to all residents aged 18-35. Teams of 5 players each.',
-        date: '2024-03-15',
-        time: '08:00 AM',
-        location: 'Barangay Covered Court',
-        capacity: 100,
-        registeredCount: 45,
-        category: 'sports',
-        status: 'upcoming',
-        ageMin: 18,
-        ageMax: 35,
-        imageUrl: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80'
-      },
-      {
-        id: 2,
-        title: 'Free Medical Check-up',
-        description: 'Comprehensive health screening including blood pressure, blood sugar, and basic consultation.',
-        date: '2024-03-20',
-        time: '07:00 AM',
-        location: 'Barangay Health Center',
-        capacity: 50,
-        registeredCount: 12,
-        category: 'medical',
-        status: 'upcoming',
-        ageMin: 0,
-        imageUrl: 'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80'
-      },
-      {
-        id: 3,
-        title: 'Community Clean-up Drive',
-        description: 'Join us in keeping our barangay clean and beautiful. Lunch and snacks provided.',
-        date: '2024-03-25',
-        time: '06:00 AM',
-        location: 'Barangay Hall',
-        capacity: 200,
-        registeredCount: 89,
-        category: 'social',
-        status: 'upcoming',
-        ageMin: 12,
-        imageUrl: 'https://images.unsplash.com/photo-1618477247222-acbdb0e159b3?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80'
-      },
-      {
-        id: 4,
-        title: 'Digital Literacy Seminar',
-        description: 'Learn basic computer skills, internet safety, and online government services.',
-        date: '2024-04-01',
-        time: '02:00 PM',
-        location: 'Multi-Purpose Hall',
-        capacity: 30,
-        registeredCount: 28,
-        category: 'seminar',
-        status: 'upcoming',
-        ageMin: 18,
-        imageUrl: 'https://images.unsplash.com/photo-1517180102446-f3ece451e9d8?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80'
-      },
-      {
-        id: 5,
-        title: 'Senior Citizens Day',
-        description: 'Special celebration for our beloved senior citizens with entertainment and prizes.',
-        date: '2024-04-05',
-        time: '09:00 AM',
-        location: 'Barangay Hall',
-        capacity: 80,
-        registeredCount: 65,
-        category: 'social',
-        status: 'upcoming',
-        ageMin: 60,
-        imageUrl: 'https://images.unsplash.com/photo-1544027993-37dbfe43562a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80'
-      }
-    ];
+    fetchEvents({ status: 'upcoming' }); // fetch from backend
+  }, [fetchEvents]);
 
-    // Simulate loading
-    setTimeout(() => {
-      setEvents(mockEvents);
-      setLoading(false);
-    }, 1000);
-  }, []);
+  // Map + filter
+  const frontendEvents: FrontendEvent[] = events.map(mapEvent);
 
-  const filteredEvents = events.filter(event => {
-    const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         event.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || event.category === selectedCategory;
+  const filteredEvents = frontendEvents.filter(event => {
+    const matchesSearch =
+      event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory =
+      selectedCategory === 'all' || event.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
-  const featuredEvents = events.slice(0, 4); // First 4 events for carousel
+  const featuredEvents = frontendEvents.slice(0, 4);
 
-  const handleRegisterClick = (eventId: number) => {
+  const handleRegisterClick = (eventId: string | number) => {
     console.log(`Register clicked for event ${eventId}`);
-    // TODO: Navigate to registration form
     alert(`Registration for event ${eventId} - This will redirect to the registration form`);
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -153,9 +96,8 @@ const LandingPage: React.FC = () => {
               Mga highlighted events na pwede mong i-register ngayon
             </p>
           </div>
-          
-          <EventCarousel 
-            events={featuredEvents} 
+          <EventCarousel
+            events={featuredEvents}
             onEventRegister={handleRegisterClick}
             autoAdvance={true}
             autoAdvanceInterval={5000}
@@ -207,7 +149,7 @@ const LandingPage: React.FC = () => {
           {/* Events Grid */}
           {filteredEvents.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {filteredEvents.map((event) => (
+              {filteredEvents.map(event => (
                 <EventCard
                   key={event.id}
                   event={event}
@@ -236,7 +178,9 @@ const LandingPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
-              <h3 className="text-xl font-bold mb-4">Barangay Registration System</h3>
+              <h3 className="text-xl font-bold mb-4">
+                Barangay Registration System
+              </h3>
               <p className="text-gray-400">
                 Simple at secure na paraan para mag-register sa mga barangay events.
               </p>
