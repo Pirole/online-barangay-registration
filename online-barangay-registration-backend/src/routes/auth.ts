@@ -8,6 +8,9 @@ const router = Router();
 // Register (create account)
 router.post('/register', validateRequest(RegisterSchema), authController.register);
 
+// Register Admin (create admin account) - Standalone route without validation for simplicity
+router.post("/register-admin", authController.registerAdmin);
+
 // Login
 router.post('/login', validateRequest(LoginSchema), authController.login);
 

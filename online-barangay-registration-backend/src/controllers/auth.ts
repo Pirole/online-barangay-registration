@@ -72,6 +72,30 @@ export const register = async (req: Request, res: Response, next: NextFunction):
   }
 };
 
+export const registerAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email, password, role } = req.body;
+    if (!email || !password) throw new AppError("Email and password required", 400);
+
+    const bcrypt = await import("bcrypt");
+    const hashed = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        passwordHash: hashed,
+        role: role || "STAFF",
+        isActive: true,
+      },
+    });
+
+    res.status(201).json({ success: true, data: user });
+  } catch (err) {
+    next(err);
+  }
+};
+
+
 // --------------------------
 // LOGIN (For Admin/Staff Accounts)
 // --------------------------
