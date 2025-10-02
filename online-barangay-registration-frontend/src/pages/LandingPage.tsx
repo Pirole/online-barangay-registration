@@ -50,45 +50,41 @@ const LandingPage: React.FC = () => {
       {/* HERO */}
       <section
         aria-label="Hero"
-        className="pt-20 pb-12 bg-white" /* blank background per request */
+        className="pt-28 pb-24 bg-white min-h-[70vh] flex items-center" // taller hero, vertically centered
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+            {/* Text */}
             <div className="order-2 md:order-1">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight text-gray-900">
-                Ang Barangay Mo, <span className="text-primary-600">Online Na!</span>
+              <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-tight text-red-500">
+                Ang Barangay 604 ay{" "}
+                <span className="text-primary-600">Online Na!</span>
               </h1>
-              <p className="mt-4 text-lg text-gray-600">
+
+              <p className="mt-6 text-xl text-gray-600 max-w-xl">
                 Mas mabilis. Mas madali. Mag-register sa barangay events anytime, anywhere.
               </p>
 
-              <div className="mt-6 flex flex-col sm:flex-row gap-3">
+              <div className="mt-8 flex flex-col sm:flex-row gap-4">
                 <button
                   onClick={scrollToEvents}
-                  className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-gradient-to-r from-primary-600 to-primary-400 text-white font-semibold shadow hover:scale-[1.02] transition-transform"
+                  className="inline-flex items-center justify-center px-8 py-4 rounded-full bg-gradient-to-r from-primary-600 to-primary-400 text-white text-lg font-semibold shadow hover:scale-[1.03] transition-transform"
                 >
                   Browse Events
                 </button>
-
-                <a
-                  href="#about"
-                  className="inline-flex items-center justify-center px-6 py-3 rounded-full border border-gray-200 text-gray-700 font-medium bg-white hover:bg-gray-50 transition"
-                >
-                  Learn More
-                </a>
               </div>
 
-              <p className="mt-4 text-sm text-gray-500">
+              <p className="mt-6 text-base text-gray-500">
                 <span className="font-medium">Tip:</span> Mag-register na para hindi ma-late!
               </p>
             </div>
 
-            {/* blank graphic placeholder */}
+            {/* Right side placeholder */}
             <div className="order-1 md:order-2">
-              <div className="w-full h-56 sm:h-72 md:h-64 lg:h-72 rounded-2xl bg-gradient-to-br from-primary-100 to-primary-50 border border-gray-200 flex items-center justify-center">
+              <div className="w-full h-72 sm:h-96 md:h-[28rem] rounded-2xl bg-gradient-to-br from-primary-100 to-primary-50 border border-gray-200 flex items-center justify-center">
                 <div className="text-center">
-                  <div className="w-28 h-28 rounded-full bg-white/80 flex items-center justify-center mx-auto mb-3">
-                    <span className="text-primary-600 font-bold">Logo</span>
+                  <div className="w-32 h-32 rounded-full bg-white/80 flex items-center justify-center mx-auto mb-4">
+                    <span className="text-primary-600 font-bold text-lg">Logo</span>
                   </div>
                   <p className="text-sm text-gray-500">Barangay image placeholder</p>
                 </div>

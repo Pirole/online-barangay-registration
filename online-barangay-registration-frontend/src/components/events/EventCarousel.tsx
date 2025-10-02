@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import EventCard, { type Event } from './EventCard';
+import EventCard, { type FrontendEvent } from './EventCard';
 
 interface EventCarouselProps {
-  events: Event[];
-  onEventRegister?: (eventId: string | number) => void; // ✅ updated type
+  events: FrontendEvent[];
+  onEventRegister?: (eventId: string | number) => void;
   autoAdvance?: boolean;
   autoAdvanceInterval?: number;
 }

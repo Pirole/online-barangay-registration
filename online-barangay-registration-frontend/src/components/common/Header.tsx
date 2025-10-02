@@ -38,9 +38,7 @@ const Header: React.FC<HeaderProps> = ({ className = '' }) => {
           <a href="#events" className="text-gray-700 hover:text-blue-600 transition-colors">Events</a>
           <a href="#about" className="text-gray-700 hover:text-blue-600 transition-colors">About</a>
           <a href="#contact" className="text-gray-700 hover:text-blue-600 transition-colors">Contact</a>
-          <button className="bg-gradient-to-r from-blue-600 to-red-500 text-white px-6 py-2 rounded-full hover:shadow-lg transition-all transform hover:scale-105">
-            Register for Events
-          </button>
+          <a></a><a></a><a></a><a></a><a></a><a></a>
         </div>
 
         {/* Mobile Menu Button */}
