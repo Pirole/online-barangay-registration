@@ -282,33 +282,54 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const registerForEvent = async (
-    eventId: string,
-    registrationData: any
-  ): Promise<Registrant> => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`${API_BASE}/events/${eventId}/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(registrationData),
-      });
+  eventId: string,
+  formData: any
+): Promise<any> => {
+  setIsLoading(true);
+  setError(null);
+  try {
+    const fd = new FormData();
+    fd.append("eventId", eventId);
+    fd.append("firstName", formData.firstName);
+    fd.append("lastName", formData.lastName);
+    fd.append("age", String(formData.age));
+    fd.append("address", formData.address);
+    fd.append("barangay", formData.barangay);
+    fd.append("phone", formData.phone);
 
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.message || "Registration failed");
+    if (formData.photo) {
+      // Convert base64 → Blob
+      const byteString = atob(formData.photo.split(",")[1]);
+      const mimeString = formData.photo.split(",")[0].split(":")[1].split(";")[0];
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
       }
-
-      const data = await response.json();
-      return data.data;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Registration failed";
-      setError(msg);
-      throw new Error(msg);
-    } finally {
-      setIsLoading(false);
+      const blob = new Blob([ab], { type: mimeString });
+      fd.append("photo", blob, "photo.jpg");
     }
-  };
+
+    const response = await fetch(`${API_BASE}/registrations`, {
+      method: "POST",
+      body: fd,
+    });
+
+    if (!response.ok) {
+      const errData = await response.json();
+      throw new Error(errData.message || "Registration failed");
+    }
+
+    const data = await response.json();
+    return data.data; // should include { registrationId }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Registration failed";
+    setError(msg);
+    throw new Error(msg);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const approveRegistrant = async (registrantId: string): Promise<void> => {
     setIsLoading(true);

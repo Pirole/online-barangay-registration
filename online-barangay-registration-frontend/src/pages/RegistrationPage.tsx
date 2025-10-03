@@ -4,7 +4,8 @@ import { useParams, Link } from 'react-router-dom';
 import { useEvents } from '../context/EventContext';
 
 interface FormData {
-  name: string;
+  firstName: string;
+  lastName: string;
   address: string;
   age: number | '';
   phone: string;
@@ -13,7 +14,7 @@ interface FormData {
 }
 
 interface OtpData {
-  registrantId: string;
+  registrationId: string;
   code: string;
 }
 
@@ -23,7 +24,8 @@ const RegistrationPage: React.FC = () => {
   
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<FormData>({
-    name: '',
+    firstName: '',
+    lastName: '',
     address: '',
     age: '',
     phone: '',
@@ -31,7 +33,7 @@ const RegistrationPage: React.FC = () => {
     photo: ''
   });
   const [otpData, setOtpData] = useState<OtpData>({
-    registrantId: '',
+    registrationId: '',
     code: ''
   });
   const [qrCode, setQrCode] = useState<string>('');
@@ -59,13 +61,13 @@ const RegistrationPage: React.FC = () => {
   const validateStep1 = () => {
     const errors: Record<string, string> = {};
     
-    if (!formData.name.trim()) errors.name = 'Pangalan ay required';
-    if (!formData.address.trim()) errors.address = 'Address ay required';
-    if (!formData.age || formData.age < 0) errors.age = 'Valid age ay required';
-    if (!validatePhone(formData.phone)) errors.phone = 'Valid PH mobile number ay required (09XXXXXXXXX)';
-    if (!formData.barangay.trim()) errors.barangay = 'Barangay ay required';
+    if (!formData.firstName.trim()) errors.firstName = 'First name is required';
+    if (!formData.lastName.trim()) errors.lastName = 'Last name is required';
+    if (!formData.address.trim()) errors.address = 'Address is required';
+    if (!formData.age || formData.age < 0) errors.age = 'Valid age is required';
+    if (!validatePhone(formData.phone)) errors.phone = 'Valid PH mobile number is required (09XXXXXXXXX)';
+    if (!formData.barangay.trim()) errors.barangay = 'Barangay is required';
     
-    // ✅ FIX: Use camelCase (FrontendEvent has ageMin, ageMax)
     if (selectedEvent && formData.age) {
       if (selectedEvent.ageMin && formData.age < selectedEvent.ageMin) {
         errors.age = `Minimum age is ${selectedEvent.ageMin}`;
@@ -143,10 +145,10 @@ const RegistrationPage: React.FC = () => {
 
   const sendOtp = async () => {
     try {
-      const registrant = await registerForEvent(eventId!, formData);
-      setOtpData(prev => ({ ...prev, registrantId: registrant.id }));
+      const result = await registerForEvent(eventId!, formData);
+      setOtpData(prev => ({ ...prev, registrationId: result.id })); // backend returns registrationId
       setOtpSent(true);
-      alert('OTP sent to your mobile number! (Demo: use 123456)');
+      alert('OTP sent to your mobile number!');
     } catch (err) {
       setOtpError(err instanceof Error ? err.message : 'Failed to register');
     }
@@ -159,9 +161,8 @@ const RegistrationPage: React.FC = () => {
     }
     
     try {
+      // TODO: replace mock check with actual /otp/verify API call
       if (otpData.code === '123456') {
-        const mockQrCode = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==`;
-        setQrCode(mockQrCode);
         setCurrentStep(4);
       } else {
         setOtpError('Invalid OTP code');
@@ -196,10 +197,8 @@ const RegistrationPage: React.FC = () => {
   }
 
   return (
-    // ... ✅ KEEP THE REST AS-IS (UI for steps 1–4 unchanged)
-    // The only real fix was switching age_min/age_max → ageMin/ageMax and removing `navigate`
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      {/* ... (rest of JSX unchanged) */}
+      {/* TODO: keep existing stepper UI here (step 1–4) */}
     </div>
   );
 };
