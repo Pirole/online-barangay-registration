@@ -69,10 +69,30 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
   try {
     const { title, description, location, startDate, endDate, capacity, ageMin, ageMax, categoryId, managerId } = req.body;
     const result = await query(
-      `INSERT INTO events (title, description, location, start_date, end_date, capacity, age_min, age_max, category_id, manager_id, is_active, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,NOW(),NOW()) RETURNING id`,
-      [title, description || null, location, startDate, endDate, capacity || null, ageMin || null, ageMax || null, categoryId || null, managerId || null]
-    );
+  `INSERT INTO events (
+      id, title, description, location, start_date, end_date,
+      capacity, age_min, age_max, category_id, manager_id,
+      is_active, created_at, updated_at
+    )
+    VALUES (
+      gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+      true, NOW(), NOW()
+    )
+    RETURNING id`,
+  [
+    title,
+    description || null,
+    location,
+    startDate,
+    endDate,
+    capacity || null,
+    ageMin || null,
+    ageMax || null,
+    categoryId || null,
+    managerId || null,
+  ]
+);
+
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (error) {
     next(error);
