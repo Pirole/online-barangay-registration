@@ -61,7 +61,7 @@ const LandingPage: React.FC = () => {
       {/* HERO */}
       <section
         aria-label="Hero"
-        className="pt-28 pb-24 bg-white min-h-[70vh] flex items-center" // taller hero, vertically centered
+        className="pt-28 pb-24 bg-light-grey min-h-[70vh] flex items-center" // taller hero, vertically centered
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
