@@ -1,5 +1,5 @@
 // src/pages/LandingPage.tsx
-import React, { useMemo, useRef } from "react";
+import React, { useMemo, useRef, useState, useEffect } from "react";
 import { Search, Filter, Calendar as CalendarIcon, MapPin, Users, CalendarPlus, FileText, QrCode } from "lucide-react";
 import Header from "../components/common/Header";
 import Footer from "../components/common/Footer";
@@ -11,6 +11,17 @@ import { useEvents } from "../context/EventContext";
 const LandingPage: React.FC = () => {
   const { events, isLoading } = useEvents();
   const eventsSectionRef = useRef<HTMLElement | null>(null);
+   useEffect(() => {
+    fetch("http://localhost:5000/api/v1/categories")
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setCategories(data.data.map((c: any) => c.name));
+        }
+      })
+      .catch(err => console.error("Failed to load categories", err));
+  }, []);
+  const [categories, setCategories] = useState<string[]>([]);
 
   // We assume `events` is already mapped to FrontendEvent[] by EventContext
   const frontendEvents: FrontendEvent[] = events || [];
@@ -119,11 +130,11 @@ const LandingPage: React.FC = () => {
               <div className="hidden sm:block">
                 <select className="px-3 py-2 border border-gray-200 rounded-full bg-white text-sm">
                   <option value="all">All Categories</option>
-                  <option value="sports">Sports</option>
-                  <option value="medical">Medical</option>
-                  <option value="social">Social</option>
-                  <option value="seminar">Seminar</option>
-                  <option value="other">Other</option>
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat.toLowerCase()}>
+                      {cat}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

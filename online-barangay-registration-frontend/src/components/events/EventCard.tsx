@@ -11,7 +11,7 @@ export interface FrontendEvent {
   location: string;
   capacity: number;
   registeredCount: number;
-  category: 'sports' | 'medical' | 'social' | 'seminar' | 'other';
+  category: string;
   status: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
   imageUrl?: string;
   ageMin?: number;

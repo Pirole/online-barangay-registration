@@ -9,6 +9,7 @@ import admin from './admin';
 import upload from './upload';
 import customFields from './customFields';
 import teams from './teams';
+import categories from './categories';
 
 const router = Router();
 
@@ -21,5 +22,7 @@ router.use('/admin', admin);
 router.use('/upload', upload);
 router.use('/custom-fields', customFields);
 router.use('/teams', teams);
+router.use('/categories', categories);
+
 
 export default router;
