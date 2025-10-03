@@ -28,7 +28,7 @@ const Header: React.FC<HeaderProps> = ({ className = '' }) => {
             <span className="text-white font-bold text-sm">BRG</span>
           </div>
           <div className="hidden sm:block">
-            <h1 className="text-lg font-bold text-gray-800">Barangay San Miguel</h1>
+            <h1 className="text-lg font-bold text-gray-800">Barangay 604</h1>
             <p className="text-xs text-gray-600">Online Registration System</p>
           </div>
         </div>

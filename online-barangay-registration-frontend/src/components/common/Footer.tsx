@@ -29,7 +29,7 @@ const Footer: React.FC<FooterProps> = ({ className = '' }) => {
               </div>
               <div className="flex items-center space-x-3">
                 <Mail className="w-5 h-5 text-blue-400" />
-                <span className="text-gray-300">info@barangaysanmiguel.gov.ph</span>
+                <span className="text-gray-300">info@barangay604.gov.ph</span>
               </div>
               <div className="flex items-start space-x-3">
                 <MapPin className="w-5 h-5 text-blue-400 mt-1" />
