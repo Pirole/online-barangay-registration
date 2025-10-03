@@ -11,12 +11,14 @@ const nowPlus = (mins: number) => {
   return d;
 };
 
+// ==============================
+// Send OTP
+// ==============================
 export const sendOtp = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { registrationId } = req.body;
     if (!registrationId) throw new AppError('registrationId required', 400);
 
-    // create OTP
     const otp = generateOTP();
     const codeHash = hashOTP(otp);
     const expiresAt = nowPlus(OTP_EXPIRY_MINUTES);
@@ -27,15 +29,25 @@ export const sendOtp = async (req: Request, res: Response, next: NextFunction) =
       [registrationId, codeHash, expiresAt]
     );
 
-    // attempt to send sms to profile contact
-    const p = await query(`SELECT p.contact FROM profiles p JOIN registrations r ON r.profile_id = p.id WHERE r.id = $1`, [registrationId]);
+    // Try to fetch contact from profile linked to registration
+    const p = await query(
+      `SELECT p.contact 
+       FROM profiles p 
+       JOIN registrations r ON r.profile_id = p.id 
+       WHERE r.id = $1`,
+      [registrationId]
+    );
+
     const phone = p.rows[0]?.contact;
     if (phone) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const sms = require('../utils/sms');
         if (sms && typeof sms.sendSMS === 'function') {
-          await sms.sendSMS(phone, `Your registration OTP is ${otp}. Expires in ${OTP_EXPIRY_MINUTES} minutes.`);
+          await sms.sendSMS(
+            phone,
+            `Your registration OTP is ${otp}. Expires in ${OTP_EXPIRY_MINUTES} minutes.`
+          );
         } else {
           logger.info(`OTP for ${phone}: ${otp} (sms util not available)`);
         }
@@ -52,12 +64,22 @@ export const sendOtp = async (req: Request, res: Response, next: NextFunction) =
   }
 };
 
+// ==============================
+// Verify OTP
+// ==============================
 export const verifyOtp = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { registrantId, code } = req.body; // note: schema used 'registrantId' in validation
-    if (!registrantId || !code) throw new AppError('registrantId and code required', 400);
+    const { registrationId, code } = req.body;
+    if (!registrationId || !code) throw new AppError('registrationId and code required', 400);
 
-    const r = await query(`SELECT id, code_hash, expires_at, attempts, is_used FROM otp_requests WHERE registration_id = $1 ORDER BY created_at DESC LIMIT 1`, [registrantId]);
+    const r = await query(
+      `SELECT id, code_hash, expires_at, attempts, is_used 
+       FROM otp_requests 
+       WHERE registration_id = $1 
+       ORDER BY created_at DESC LIMIT 1`,
+      [registrationId]
+    );
+
     if (r.rows.length === 0) throw new AppError('OTP record not found', 404);
 
     const row = r.rows[0];
@@ -71,36 +93,52 @@ export const verifyOtp = async (req: Request, res: Response, next: NextFunction)
       throw new AppError('Invalid OTP', 400);
     }
 
-    // mark used
+    // Mark as used
     await query(`UPDATE otp_requests SET is_used = true WHERE id = $1`, [row.id]);
 
-    // Optionally update registration status to APPROVED or set a flag for admin review — we keep it PENDING until admin approves.
+    // Optionally update registration status
     res.json({ success: true, message: 'OTP verified' });
   } catch (error) {
     next(error);
   }
 };
 
+// ==============================
+// Resend OTP
+// ==============================
 export const resendOtp = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { registrationId } = req.body;
     if (!registrationId) throw new AppError('registrationId required', 400);
 
-    // check last OTP attempts & expiry and generate new
     const otp = generateOTP();
     const codeHash = hashOTP(otp);
     const expiresAt = nowPlus(OTP_EXPIRY_MINUTES);
 
-    await query(`INSERT INTO otp_requests (registration_id, code_hash, expires_at, attempts, is_used, created_at) VALUES ($1,$2,$3,0,false,NOW())`, [registrationId, codeHash, expiresAt]);
+    await query(
+      `INSERT INTO otp_requests (registration_id, code_hash, expires_at, attempts, is_used, created_at) 
+       VALUES ($1,$2,$3,0,false,NOW())`,
+      [registrationId, codeHash, expiresAt]
+    );
 
-    const p = await query(`SELECT p.contact FROM profiles p JOIN registrations r ON r.profile_id = p.id WHERE r.id = $1`, [registrationId]);
+    const p = await query(
+      `SELECT p.contact 
+       FROM profiles p 
+       JOIN registrations r ON r.profile_id = p.id 
+       WHERE r.id = $1`,
+      [registrationId]
+    );
+
     const phone = p.rows[0]?.contact;
     if (phone) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const sms = require('../utils/sms');
         if (sms && typeof sms.sendSMS === 'function') {
-          await sms.sendSMS(phone, `Your registration OTP (resend) is ${otp}. Expires in ${OTP_EXPIRY_MINUTES} minutes.`);
+          await sms.sendSMS(
+            phone,
+            `Your registration OTP (resend) is ${otp}. Expires in ${OTP_EXPIRY_MINUTES} minutes.`
+          );
         } else {
           logger.info(`OTP resend for ${phone}: ${otp}`);
         }
@@ -108,6 +146,7 @@ export const resendOtp = async (req: Request, res: Response, next: NextFunction)
         logger.info(`OTP resend for ${phone}: ${otp} (sms fail)`);
       }
     }
+
     res.json({ success: true, message: 'OTP resent (if phone available)' });
   } catch (error) {
     next(error);

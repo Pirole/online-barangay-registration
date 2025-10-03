@@ -23,7 +23,13 @@
       const inserted = await query(
         `INSERT INTO registrations (event_id, profile_id, status, photo_path, custom_values, created_at, updated_at)
         VALUES ($1,$2,$3,$4,$5,NOW(),NOW()) RETURNING id`,
-        [eventId, profileId || null, 'PENDING', photoPath, customValues ? JSON.stringify(customValues) : null]
+        [
+          eventId,
+          profileId || null,
+          'PENDING',
+          photoPath,
+          customValues ? JSON.stringify(customValues) : null,
+        ]
       );
 
       const registrationId = inserted.rows[0].id;
@@ -41,16 +47,21 @@
       );
 
       // Attempt to send SMS if phone available in profile
-      const profileRes = await query(`SELECT p.contact, p.first_name FROM profiles p WHERE p.id = $1`, [profileId]);
+      const profileRes = await query(
+        `SELECT p.contact, p.first_name FROM profiles p WHERE p.id = $1`,
+        [profileId]
+      );
       const contact = profileRes.rows[0]?.contact;
+
       if (contact) {
-        // try to call sms util
         try {
-          // dynamic import to avoid failing when sms util missing
           // eslint-disable-next-line @typescript-eslint/no-var-requires
           const sms = require('../utils/sms');
           if (sms && typeof sms.sendSMS === 'function') {
-            await sms.sendSMS(contact, `Your registration OTP is ${otp}. It expires in 5 minutes.`);
+            await sms.sendSMS(
+              contact,
+              `Your registration OTP is ${otp}. It expires in 5 minutes.`
+            );
           } else {
             logger.info(`OTP for ${contact}: ${otp} (sms util not available)`);
           }
@@ -61,11 +72,16 @@
         logger.info(`OTP for registration ${registrationId} -> ${otp} (no phone on profile)`);
       }
 
-      res.status(201).json({ success: true, data: { registrationId }, message: 'Registration created - OTP sent if phone available' });
+      res.status(201).json({
+        success: true,
+        data: { registrationId },
+        message: 'Registration created - OTP sent if phone available',
+      });
     } catch (error) {
       next(error);
     }
   };
+
 
   export const submitRegistration = async (req: Request, res: Response, next: NextFunction) => {
     // If you have a multi-step flow — accept a temp photo ID, merge and finalize registration
