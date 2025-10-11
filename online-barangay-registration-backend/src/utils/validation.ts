@@ -1,5 +1,6 @@
 import { z, ZodError, ZodSchema } from "zod";
 
+
 // Phone number validation for Philippine format
 const phoneRegex = /^(\+63|0)9\d{9}$/;
 
@@ -79,8 +80,12 @@ export const UpdateEventSchema = z.object({
 });
 
 export const OTPVerifySchema = z.object({
-  registrationId: z.string().uuid("Invalid registrant ID format"),
-  code: z.string().length(6, "OTP code must be exactly 6 digits").regex(/^\d{6}$/, "OTP code must contain only digits"),
+  registrationId: z
+    .string()
+    .min(1, { message: "registrationId is required" }),
+  code: z
+    .string()
+    .min(1, { message: "code is required" }),
 });
 
 export const ApprovalSchema = z.object({
