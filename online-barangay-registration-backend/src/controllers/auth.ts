@@ -1,11 +1,13 @@
+// src/controllers/auth.ts
 import { Request, Response, NextFunction } from 'express';
 import jwt, { SignOptions, Secret } from 'jsonwebtoken';
 import crypto from 'crypto';
 import prisma from '../config/prisma';
 import { logger } from '../utils/logger';
 import { AppError } from '../middleware/errorHandler';
+import { createRegistrationInternal } from './registrations';
+
 // Helpers
-// --------------------------
 const hashToken = (token: string): string =>
   crypto.createHash('sha256').update(token).digest('hex');
 
@@ -24,45 +26,53 @@ const generateRefreshToken = (payload: object): string => {
   };
   return jwt.sign(payload, secret, options);
 };
-// REGISTER (Standalone Event)
-// --------------------------
+
+// REGISTER (compat wrapper) - delegates to unified registration logic
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { eventId, firstName, lastName, age, address, barangay, phone, photoTempId, customValues } =
-       (req as any).validatedData;  // ✅ Use validatedData
+    // validatedData is preferred (from your validate middleware). Fallback to body.
+    const {
+      eventId, firstName, lastName, age, address, barangay, phone, photoTempId, customValues
+    } = (req as any).validatedData ?? req.body;
 
     if (!eventId || !firstName || !lastName) {
       throw new AppError('Missing required registration fields', 400);
     }
-    const registrationData = {
+
+    // Build customValues payload preserving form data
+    const registrationCustom = {
       firstName,
       lastName,
       age: age ? Number(age) : null,
       address,
       barangay,
       contact: phone,
-      ...(customValues || {})
+      ...(customValues || {}),
     };
-    // Create registration without profile
-    const registration = await prisma.registration.create({
-      data: {
-        eventId,
-        profileId: null, // No profile for standalone registrations
-        photoPath: photoTempId ? `/uploads/${photoTempId}` : null,
-        customValues: registrationData, // Store all form data as JSON
-      },
-      include: {
-        event: true,
-      },
+
+    const photoPath = photoTempId ? `/uploads/${photoTempId}` : (req as any).file ? (req as any).file.path : null;
+
+    const { registration } = await createRegistrationInternal({
+      eventId,
+      profileId: null,
+      customValues: registrationCustom,
+      photoPath,
     });
-    logger.info(`✅ Registration created for ${firstName} ${lastName} - Event: ${registration.event?.title}`);
+
+    logger.info(`✅ Registration created for ${firstName} ${lastName} - Event ID: ${eventId}`);
+
+    // Keep response shape backward compatible
     res.status(201).json({ message: 'Registration successful', registration });
-    } catch (error) {
+  } catch (error) {
     logger.error('❌ Registration failed', error);
     next(error);
   }
 };
 
+// --------------------------
+// registerAdmin, login, refreshToken, logout, me
+// unchanged from your original implementation - preserved below
+// (I will reuse your existing code for these handlers)
 export const registerAdmin = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password, role } = req.body;
@@ -84,9 +94,7 @@ export const registerAdmin = async (req: Request, res: Response, next: NextFunct
     next(err);
   }
 };
-// --------------------------
-// LOGIN (For Admin/Staff Accounts)
-// --------------------------
+
 export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { email, password } = req.body;
@@ -113,7 +121,7 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
 
     // Store refresh token using token as unique identifier
     await prisma.refreshToken.upsert({
-      where: { 
+      where: {
         token: hashed // Using token as unique identifier
       },
       update: {
@@ -135,9 +143,7 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
     next(error);
   }
 };
-// --------------------------
-// REFRESH TOKEN
-// --------------------------
+
 export const refreshToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { token } = req.body;
@@ -159,9 +165,7 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
     next(error);
   }
 };
-// --------------------------
-// LOGOUT
-// --------------------------
+
 export const logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { token } = req.body;
@@ -175,12 +179,9 @@ export const logout = async (req: Request, res: Response, next: NextFunction): P
     next(error);
   }
 };
-// --------------------------
-// ME (Profile Info for Authenticated User)
-// --------------------------
+
 export const me = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    // Type assertion for req.user - you might want to extend the Request type properly
     const userFromToken = req.user as { userId: string; email: string; role: string } | undefined;
     
     if (!userFromToken) throw new AppError('Unauthorized', 401);
