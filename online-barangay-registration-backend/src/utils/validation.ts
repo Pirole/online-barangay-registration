@@ -79,7 +79,7 @@ export const UpdateEventSchema = z.object({
 });
 
 export const OTPVerifySchema = z.object({
-  registrantId: z.string().uuid("Invalid registrant ID format"),
+  registrationId: z.string().uuid("Invalid registrant ID format"),
   code: z.string().length(6, "OTP code must be exactly 6 digits").regex(/^\d{6}$/, "OTP code must contain only digits"),
 });
 

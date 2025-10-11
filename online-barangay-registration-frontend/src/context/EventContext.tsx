@@ -91,8 +91,8 @@ interface EventContextType {
     eventId: string,
     registrationData: any
   ) => Promise<Registrant>;
-  approveRegistrant: (registrantId: string) => Promise<void>;
-  rejectRegistrant: (registrantId: string, reason: string) => Promise<void>;
+  approveRegistrant: (registrationId: string) => Promise<void>;
+  rejectRegistrant: (registrationId: string, reason: string) => Promise<void>;
 
   // Utility
   clearError: () => void;
@@ -331,12 +331,12 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({
   }
 };
 
-  const approveRegistrant = async (registrantId: string): Promise<void> => {
+  const approveRegistrant = async (registrationId: string): Promise<void> => {
     setIsLoading(true);
     setError(null);
     try {
       const response = await fetch(
-        `${API_BASE}/registrants/${registrantId}/approve`,
+        `${API_BASE}/registrants/${registrationId}/approve`,
         {
           method: "POST",
           headers: {
@@ -349,7 +349,7 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({
 
       setRegistrants((prev) =>
         prev.map((r) =>
-          r.id === registrantId ? { ...r, status: "approved" } : r
+          r.id === registrationId ? { ...r, status: "approved" } : r
         )
       );
     } catch (err) {
@@ -363,14 +363,14 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const rejectRegistrant = async (
-    registrantId: string,
+    registrationId: string,
     reason: string
   ): Promise<void> => {
     setIsLoading(true);
     setError(null);
     try {
       const response = await fetch(
-        `${API_BASE}/registrants/${registrantId}/reject`,
+        `${API_BASE}/registrants/${registrationId}/reject`,
         {
           method: "POST",
           headers: {
@@ -385,7 +385,7 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({
 
       setRegistrants((prev) =>
         prev.map((r) =>
-          r.id === registrantId
+          r.id === registrationId
             ? { ...r, status: "rejected", rejection_reason: reason }
             : r
         )

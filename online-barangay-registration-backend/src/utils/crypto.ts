@@ -76,7 +76,7 @@ export const verifyRefreshToken = (token: string): RefreshTokenPayload => {
 
 // QR Code Token Generation (for registrant QR codes)
 export interface QRPayload {
-  registrantId: string;
+  registrationId: string;
   eventId: string;
   timestamp: number;
 }
@@ -100,7 +100,7 @@ export const verifyQRToken = (token: string): QRPayload => {
   const decoded = jwt.verify(token, JWT_SECRET, options) as JwtPayload;
   
   return {
-    registrantId: decoded.registrantId,
+    registrationId: decoded.registrationId,
     eventId: decoded.eventId,
     timestamp: decoded.timestamp
   };

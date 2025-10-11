@@ -35,16 +35,21 @@
       const registrationId = inserted.rows[0].id;
 
       // Generate OTP (6-digit) and store hashed
+      // Generate OTP (6-digit) and store hashed
       const otp = generateOTP();
       const hashed = hashOTP(otp);
       const expiresAt = new Date();
       expiresAt.setMinutes(expiresAt.getMinutes() + 5);
+
+      logger.info("DEBUG >> Inserting OTP for registrationId:", registrationId, "OTP:", otp);
 
       await query(
         `INSERT INTO otp_requests (registration_id, code_hash, expires_at, attempts, is_used, created_at)
         VALUES ($1,$2,$3,0,false,NOW())`,
         [registrationId, hashed, expiresAt]
       );
+
+      logger.info("DEBUG >> Successfully inserted OTP");
 
       // Attempt to send SMS if phone available in profile
       const profileRes = await query(
