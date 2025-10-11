@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
 import { query } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
+import { generateOTP, hashOTP, OTP_EXPIRY_MINUTES, MAX_OTP_ATTEMPTS } from '../utils/otp';
 import { logger } from '../utils/logger';
-import crypto from 'crypto';
-import { generateOTP, hashOTP } from '../utils/otp';
 
 // Helper: generate random ID
 const randomId = () => crypto.randomUUID();
