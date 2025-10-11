@@ -1,6 +1,6 @@
 // src/pages/RegistrationPage.tsx
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useEvents } from "../context/EventContext";
 
 interface FormData {
@@ -20,14 +20,7 @@ interface OtpData {
 
 const RegistrationPage: React.FC = () => {
   const { eventId } = useParams<{ eventId: string }>();
-  const navigate = useNavigate();
-  const {
-    selectedEvent,
-    fetchEventById,
-    registerForEvent,
-    isLoading,
-    error,
-  } = useEvents();
+  const { selectedEvent, fetchEventById, registerForEvent, isLoading } = useEvents();
 
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<FormData>({
@@ -39,23 +32,20 @@ const RegistrationPage: React.FC = () => {
     barangay: "",
     photo: "",
   });
-  const [otpData, setOtpData] = useState<OtpData>({
-    registrationId: "",
-    code: "",
-  });
-  const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [otpData, setOtpData] = useState<OtpData>({ registrationId: "", code: "" });
+  const [qrCodeUrl, setQrCodeUrl] = useState("");
   const [otpError, setOtpError] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [verifying, setVerifying] = useState(false);
 
-  // Camera
+  // Camera states
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [photoPreview, setPhotoPreview] = useState<string>("");
+  const [photoPreview, setPhotoPreview] = useState("");
+  const [cameraError, setCameraError] = useState("");
 
-  // Fetch selected event
+  /* ---------------- FETCH EVENT ---------------- */
   useEffect(() => {
     if (eventId) fetchEventById(eventId);
   }, [eventId, fetchEventById]);
@@ -69,10 +59,8 @@ const RegistrationPage: React.FC = () => {
     if (!formData.lastName.trim()) errors.lastName = "Last name is required";
     if (!formData.address.trim()) errors.address = "Address is required";
     if (!formData.barangay.trim()) errors.barangay = "Barangay is required";
-    if (!formData.age || formData.age <= 0)
-      errors.age = "Valid age is required";
-    if (!validatePhone(formData.phone))
-      errors.phone = "Invalid PH mobile number (09XXXXXXXXX)";
+    if (!formData.age || formData.age <= 0) errors.age = "Valid age is required";
+    if (!validatePhone(formData.phone)) errors.phone = "Invalid PH mobile number";
 
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
@@ -80,27 +68,19 @@ const RegistrationPage: React.FC = () => {
 
   /* ---------------- CAMERA ---------------- */
   const startCamera = async () => {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user" },
-    });
-
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
-
-      // ✅ Force the browser to start playing the stream
-      await videoRef.current.play().catch((err) => {
-        console.warn("Autoplay prevented:", err);
-      });
-
-      setIsCameraActive(true);
+    setCameraError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+        setIsCameraActive(true);
+      }
+    } catch (err) {
+      console.error("Camera access error:", err);
+      setCameraError("Cannot access camera. Try another device or allow permission.");
     }
-  } catch (err) {
-    console.error("Error accessing camera:", err);
-    alert("Hindi ma-access ang camera. Please check permissions.");
-  }
-};
-
+  };
 
   const stopCamera = () => {
     if (videoRef.current?.srcObject) {
@@ -112,20 +92,25 @@ const RegistrationPage: React.FC = () => {
   };
 
   const capturePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const canvas = canvasRef.current;
-      const video = videoRef.current;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
+    if (!videoRef.current || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
-      setFormData((prev) => ({ ...prev, photo: dataUrl }));
-      setPhotoPreview(dataUrl);
-      stopCamera();
-    }
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+    setFormData((prev) => ({ ...prev, photo: dataUrl }));
+    setPhotoPreview(dataUrl);
+    stopCamera();
+  };
+
+  const retakePhoto = () => {
+    setFormData((prev) => ({ ...prev, photo: "" }));
+    setPhotoPreview("");
+    startCamera();
   };
 
   /* ---------------- OTP ---------------- */
@@ -133,18 +118,17 @@ const RegistrationPage: React.FC = () => {
     if (!validateStep1()) return;
     try {
       const result = await registerForEvent(eventId!, formData);
-      setOtpData((prev) => ({ ...prev, registrationId: result.id }));
-      setOtpSent(true);
-      alert("OTP has been sent to your phone number.");
+      setOtpData({ registrationId: result.id, code: "" });
+      alert("OTP sent to your phone!");
       setCurrentStep(3);
-    } catch (err) {
-      alert("Failed to send OTP. Please try again.");
+    } catch {
+      alert("Failed to send OTP. Try again.");
     }
   };
 
   const verifyOtp = async () => {
     if (!otpData.code.trim()) {
-      setOtpError("Please enter your OTP code");
+      setOtpError("Please enter OTP");
       return;
     }
     setVerifying(true);
@@ -152,40 +136,29 @@ const RegistrationPage: React.FC = () => {
       const res = await fetch("http://localhost:5000/api/v1/otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          registrationId: otpData.registrationId,
-          code: otpData.code,
-        }),
+        body: JSON.stringify(otpData),
       });
+      if (!res.ok) throw new Error("Invalid OTP");
 
-      if (!res.ok) throw new Error("Verification failed");
       const data = await res.json();
-
-      // Assuming backend now has generated QR image
-      if (data.data?.qr_image_path) {
+      if (data.data?.qr_image_path)
         setQrCodeUrl(`http://localhost:5000${data.data.qr_image_path}`);
-      } else if (data.data?.qr_value) {
-        // fallback: use qr_value + react-qr-code if needed
+      else if (data.data?.qr_value)
         setQrCodeUrl(data.data.qr_value);
-      }
+
       setCurrentStep(4);
-    } catch (err) {
+    } catch {
       setOtpError("Invalid or expired OTP");
     } finally {
       setVerifying(false);
     }
   };
 
-  /* ---------------- UI HANDLERS ---------------- */
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
+  /* ---------------- RENDER ---------------- */
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-gray-600">
-        <p>Loading event...</p>
+        Loading event...
       </div>
     );
   }
@@ -193,7 +166,7 @@ const RegistrationPage: React.FC = () => {
   if (!selectedEvent) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center">
-        <h2 className="text-xl font-bold mb-4">Event not found</h2>
+        <h2 className="text-lg font-semibold mb-4">Event not found</h2>
         <Link to="/events" className="text-blue-600 underline">
           Back to Events
         </Link>
@@ -201,15 +174,14 @@ const RegistrationPage: React.FC = () => {
     );
   }
 
-  /* ---------------- STEP UI ---------------- */
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
       <div className="max-w-xl mx-auto bg-white shadow rounded-lg p-6">
-        <h2 className="text-2xl font-bold mb-6 text-center">
+        <h2 className="text-2xl font-bold text-center mb-6">
           Register for {selectedEvent.title}
         </h2>
 
-        {/* Step Indicator */}
+        {/* Step indicator */}
         <div className="flex justify-between mb-8">
           {["Details", "Photo", "OTP", "QR"].map((label, i) => (
             <div
@@ -223,156 +195,119 @@ const RegistrationPage: React.FC = () => {
           ))}
         </div>
 
-        {/* STEP 1: INFO */}
+        {/* Step 1: Details */}
         {currentStep === 1 && (
-          <div className="space-y-4">
-            <input
-              type="text"
-              name="firstName"
-              placeholder="First Name"
-              value={formData.firstName}
-              onChange={handleChange}
-              className="w-full border p-2 rounded"
-            />
-            <input
-              type="text"
-              name="lastName"
-              placeholder="Last Name"
-              value={formData.lastName}
-              onChange={handleChange}
-              className="w-full border p-2 rounded"
-            />
-            <input
-              type="number"
-              name="age"
-              placeholder="Age"
-              value={formData.age}
-              onChange={handleChange}
-              className="w-full border p-2 rounded"
-            />
-            <input
-              type="text"
-              name="address"
-              placeholder="Address"
-              value={formData.address}
-              onChange={handleChange}
-              className="w-full border p-2 rounded"
-            />
-            <input
-              type="text"
-              name="barangay"
-              placeholder="Barangay"
-              value={formData.barangay}
-              onChange={handleChange}
-              className="w-full border p-2 rounded"
-            />
-            <input
-              type="text"
-              name="phone"
-              placeholder="Phone (09XXXXXXXXX)"
-              value={formData.phone}
-              onChange={handleChange}
-              className="w-full border p-2 rounded"
-            />
+          <div className="space-y-3">
+            {["firstName", "lastName", "age", "address", "barangay", "phone"].map((field) => (
+              <div key={field}>
+                <input
+                  type={field === "age" ? "number" : "text"}
+                  name={field}
+                  placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
+                  value={(formData as any)[field]}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, [field]: e.target.value }))
+                  }
+                  className="w-full border rounded p-2"
+                />
+                {validationErrors[field] && (
+                  <p className="text-red-500 text-sm">{validationErrors[field]}</p>
+                )}
+              </div>
+            ))}
             <button
               onClick={() => {
                 if (validateStep1()) setCurrentStep(2);
               }}
-              className="w-full bg-blue-600 text-white py-2 rounded"
+              className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
             >
               Continue
             </button>
           </div>
         )}
 
-        {/* STEP 2: PHOTO */}
+        {/* Step 2: Photo */}
         {currentStep === 2 && (
           <div className="text-center">
-            {!photoPreview ? (
-              <>
-                {isCameraActive ? (
-                  <div>
-                    <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    style={{
-                      width: "100%",
-                      maxWidth: "360px",
-                      borderRadius: "8px",
-                      backgroundColor: "#000",
-                      display: isCameraActive ? "block" : "none",
-                    }}
-                    onCanPlay={() => {
-                      if (videoRef.current && !videoRef.current.onplaying) {
-                        videoRef.current.play().catch((err) => {
-                          console.warn("Autoplay prevented:", err);
-                        });
-                      }
-                    }}
-                  />
-                    <div className="mt-4 flex justify-center gap-2">
-                      <button
-                        onClick={capturePhoto}
-                        className="bg-green-600 text-white px-4 py-2 rounded"
-                      >
-                        Capture
-                      </button>
-                      <button
-                        onClick={stopCamera}
-                        className="bg-gray-400 text-white px-4 py-2 rounded"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={startCamera}
-                    className="bg-blue-600 text-white px-4 py-2 rounded"
-                  >
-                    Start Camera
-                  </button>
-                )}
-              </>
-            ) : (
-              <div>
+            {isCameraActive && (
+              <div className="relative w-full max-w-md mx-auto bg-black rounded-lg overflow-hidden mb-4">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-auto rounded-lg"
+                  style={{ transform: "scaleX(-1)" }}
+                />
+              </div>
+            )}
+
+            {photoPreview && !isCameraActive && (
+              <div className="w-full max-w-md mx-auto mb-4">
                 <img
                   src={photoPreview}
                   alt="Captured"
-                  className="mx-auto rounded-lg mb-4 w-40 h-40 object-cover"
+                  className="w-full h-auto rounded-lg shadow"
                 />
+              </div>
+            )}
+
+            {cameraError && (
+              <p className="text-red-500 text-sm mb-3">{cameraError}</p>
+            )}
+
+            <div className="flex justify-center space-x-4">
+              {!isCameraActive && !photoPreview && (
                 <button
-                  onClick={() => {
-                    setPhotoPreview("");
-                    setFormData((prev) => ({ ...prev, photo: "" }));
-                    startCamera();
-                  }}
-                  className="bg-yellow-500 text-white px-4 py-2 rounded"
+                  onClick={startCamera}
+                  className="bg-blue-600 text-white px-5 py-2 rounded hover:bg-blue-700"
                 >
-                  Retake Photo
+                  Start Camera
                 </button>
+              )}
+              {isCameraActive && (
+                <button
+                  onClick={capturePhoto}
+                  className="bg-green-600 text-white px-5 py-2 rounded hover:bg-green-700"
+                >
+                  Capture
+                </button>
+              )}
+              {photoPreview && !isCameraActive && (
+                <button
+                  onClick={retakePhoto}
+                  className="bg-yellow-500 text-white px-5 py-2 rounded hover:bg-yellow-600"
+                >
+                  Retake
+                </button>
+              )}
+            </div>
+
+            <canvas ref={canvasRef} className="hidden" />
+
+            {photoPreview && (
+              <div className="mt-6">
                 <button
                   onClick={sendOtp}
-                  className="ml-2 bg-blue-600 text-white px-4 py-2 rounded"
+                  className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
                 >
-                  Submit & Send OTP
+                  Continue
                 </button>
               </div>
             )}
-            <canvas ref={canvasRef} className="hidden" />
           </div>
         )}
 
-        {/* STEP 3: OTP */}
+        {/* Step 3: OTP */}
         {currentStep === 3 && (
-          <div className="space-y-4 text-center">
+          <div className="text-center space-y-4">
             <p>Enter the OTP sent to your phone:</p>
             <input
               type="text"
               value={otpData.code}
-              onChange={(e) => setOtpData((prev) => ({ ...prev, code: e.target.value }))}
+              onChange={(e) =>
+                setOtpData((prev) => ({ ...prev, code: e.target.value }))
+              }
               className="w-full border p-2 rounded text-center"
               placeholder="Enter 6-digit OTP"
             />
@@ -380,27 +315,27 @@ const RegistrationPage: React.FC = () => {
             <button
               onClick={verifyOtp}
               disabled={verifying}
-              className="w-full bg-blue-600 text-white py-2 rounded"
+              className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
             >
               {verifying ? "Verifying..." : "Verify OTP"}
             </button>
           </div>
         )}
 
-        {/* STEP 4: QR */}
+        {/* Step 4: QR */}
         {currentStep === 4 && (
           <div className="text-center space-y-4">
-            <h3 className="text-xl font-semibold text-green-600">Registration Successful!</h3>
+            <h3 className="text-xl font-semibold text-green-600">
+              Registration Successful!
+            </h3>
             {qrCodeUrl ? (
-              <img
-                src={qrCodeUrl}
-                alt="QR Code"
-                className="mx-auto w-40 h-40"
-              />
+              <img src={qrCodeUrl} alt="QR Code" className="mx-auto w-40 h-40" />
             ) : (
               <p>No QR Code available</p>
             )}
-            <p className="text-gray-600">Show this QR during the event for verification.</p>
+            <p className="text-gray-600">
+              Show this QR during the event for verification.
+            </p>
             <Link
               to="/events"
               className="block bg-blue-600 text-white py-2 rounded mt-4"
