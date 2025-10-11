@@ -80,19 +80,27 @@ const RegistrationPage: React.FC = () => {
 
   /* ---------------- CAMERA ---------------- */
   const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user" },
+    });
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+
+      // ✅ Force the browser to start playing the stream
+      await videoRef.current.play().catch((err) => {
+        console.warn("Autoplay prevented:", err);
       });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        setIsCameraActive(true);
-      }
-    } catch (err) {
-      console.error("Camera error:", err);
-      alert("Camera access denied. Please enable permissions.");
+
+      setIsCameraActive(true);
     }
-  };
+  } catch (err) {
+    console.error("Error accessing camera:", err);
+    alert("Hindi ma-access ang camera. Please check permissions.");
+  }
+};
+
 
   const stopCamera = () => {
     if (videoRef.current?.srcObject) {
@@ -284,7 +292,26 @@ const RegistrationPage: React.FC = () => {
               <>
                 {isCameraActive ? (
                   <div>
-                    <video ref={videoRef} autoPlay className="mx-auto rounded-lg" />
+                    <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    style={{
+                      width: "100%",
+                      maxWidth: "360px",
+                      borderRadius: "8px",
+                      backgroundColor: "#000",
+                      display: isCameraActive ? "block" : "none",
+                    }}
+                    onCanPlay={() => {
+                      if (videoRef.current && !videoRef.current.onplaying) {
+                        videoRef.current.play().catch((err) => {
+                          console.warn("Autoplay prevented:", err);
+                        });
+                      }
+                    }}
+                  />
                     <div className="mt-4 flex justify-center gap-2">
                       <button
                         onClick={capturePhoto}
