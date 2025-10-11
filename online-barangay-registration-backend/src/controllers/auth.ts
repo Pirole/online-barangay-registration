@@ -4,8 +4,6 @@ import crypto from 'crypto';
 import prisma from '../config/prisma';
 import { logger } from '../utils/logger';
 import { AppError } from '../middleware/errorHandler';
-
-// --------------------------
 // Helpers
 // --------------------------
 const hashToken = (token: string): string =>
@@ -26,8 +24,6 @@ const generateRefreshToken = (payload: object): string => {
   };
   return jwt.sign(payload, secret, options);
 };
-
-// --------------------------
 // REGISTER (Standalone Event)
 // --------------------------
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -38,9 +34,6 @@ export const register = async (req: Request, res: Response, next: NextFunction):
     if (!eventId || !firstName || !lastName) {
       throw new AppError('Missing required registration fields', 400);
     }
-
-    // For standalone event registration, we don't create profiles
-    // Instead, we store the registration data directly with custom values
     const registrationData = {
       firstName,
       lastName,
@@ -50,7 +43,6 @@ export const register = async (req: Request, res: Response, next: NextFunction):
       contact: phone,
       ...(customValues || {})
     };
-
     // Create registration without profile
     const registration = await prisma.registration.create({
       data: {
@@ -63,10 +55,9 @@ export const register = async (req: Request, res: Response, next: NextFunction):
         event: true,
       },
     });
-
     logger.info(`✅ Registration created for ${firstName} ${lastName} - Event: ${registration.event?.title}`);
     res.status(201).json({ message: 'Registration successful', registration });
-  } catch (error) {
+    } catch (error) {
     logger.error('❌ Registration failed', error);
     next(error);
   }
@@ -88,14 +79,11 @@ export const registerAdmin = async (req: Request, res: Response, next: NextFunct
         isActive: true,
       },
     });
-
     res.status(201).json({ success: true, data: user });
   } catch (err) {
     next(err);
   }
 };
-
-
 // --------------------------
 // LOGIN (For Admin/Staff Accounts)
 // --------------------------
@@ -117,11 +105,9 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
     if (!match) throw new AppError('Invalid credentials', 401);
 
     const payload = { userId: user.id, email: user.email, role: user.role };
-
     const accessToken = generateAccessToken(payload);
     const refreshToken = generateRefreshToken(payload);
     const hashed = hashToken(refreshToken);
-
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
@@ -149,7 +135,6 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
     next(error);
   }
 };
-
 // --------------------------
 // REFRESH TOKEN
 // --------------------------
@@ -174,7 +159,6 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
     next(error);
   }
 };
-
 // --------------------------
 // LOGOUT
 // --------------------------
@@ -191,7 +175,6 @@ export const logout = async (req: Request, res: Response, next: NextFunction): P
     next(error);
   }
 };
-
 // --------------------------
 // ME (Profile Info for Authenticated User)
 // --------------------------
