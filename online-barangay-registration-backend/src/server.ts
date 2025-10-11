@@ -8,7 +8,6 @@ import { createServer } from 'http';
 import fs from 'fs';
 import path from 'path';
 import routes from './routes';
-import { generalLimiter, devLimiter } from './middleware/rateLimiters';
 
 import { logger } from './utils/logger';
 import { connectDatabase } from './config/database';
@@ -17,6 +16,8 @@ import { requestLogger } from './middleware/requestLogger';
 
 // Load environment variables
 dotenv.config();
+
+const isDev = process.env.NODE_ENV !== 'production';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -42,10 +43,20 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
+
+const rateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per window
+  message: { error: 'Too many requests from this IP, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// ✅ Apply limiter only in production
 if (process.env.NODE_ENV === 'production') {
-  app.use(generalLimiter);
+  app.use(rateLimiter);
 } else {
-  app.use(devLimiter);
+  logger.info('🧪 Rate limiter disabled in dev');
 }
 
 app.use(compression());
