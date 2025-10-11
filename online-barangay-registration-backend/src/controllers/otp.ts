@@ -1,89 +1,140 @@
 // src/controllers/otp.ts
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
-import { query } from '../config/database';
+import jwt from 'jsonwebtoken';
+import prisma from '../config/prisma';
 import { AppError } from '../middleware/errorHandler';
-import { generateOTP, hashOTP, OTP_EXPIRY_MINUTES, MAX_OTP_ATTEMPTS } from '../utils/otp';
 import { logger } from '../utils/logger';
+import { hashOTP, OTP_EXPIRY_MINUTES, MAX_OTP_ATTEMPTS } from '../utils/otp';
 
-// ==============================
-// Verify OTP
-// ==============================
+// QR settings (mock)
+const QR_EXPIRES_DAYS = Number(process.env.QR_EXPIRES_DAYS || '7');
+const QR_SECRET = process.env.QR_SECRET || process.env.JWT_SECRET || 'qr_fallback_secret';
+
+/**
+ * POST /otp/verify
+ * Body: { registrationId, code }
+ *
+ * On success (Behavior B):
+ *  - marks otp_requests.isUsed = true
+ *  - updates registration.status = APPROVED
+ *  - create qr_code entry and return qr token
+ */
 export const verifyOtp = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { registrationId, code } = req.body;
     if (!registrationId || !code) throw new AppError('registrationId and code required', 400);
 
-    const r = await query(
-      `SELECT id, code_hash, expires_at, attempts, is_used 
-       FROM otp_requests 
-       WHERE registration_id = $1 
-       ORDER BY created_at DESC LIMIT 1`,
-      [registrationId]
-    );
+    // Fetch latest OTP for the registration
+    const otpRecord = await prisma.otpRequest.findFirst({
+      where: { registrationId },
+      orderBy: { createdAt: 'desc' },
+    });
 
-    if (r.rows.length === 0) throw new AppError('OTP record not found', 404);
-
-    const row = r.rows[0];
-    if (row.is_used) throw new AppError('OTP already used', 400);
-    if (new Date(row.expires_at) < new Date()) throw new AppError('OTP expired', 400);
-    if (row.attempts >= MAX_OTP_ATTEMPTS) throw new AppError('Max OTP attempts exceeded', 429);
+    if (!otpRecord) throw new AppError('OTP record not found', 404);
+    if (otpRecord.isUsed) throw new AppError('OTP already used', 400);
+    if (new Date(otpRecord.expiresAt) < new Date()) throw new AppError('OTP expired', 400);
+    if (otpRecord.attempts >= MAX_OTP_ATTEMPTS) throw new AppError('Max OTP attempts exceeded', 429);
 
     const hashedInput = crypto.createHash('sha256').update(code).digest('hex');
-    if (hashedInput !== row.code_hash) {
-      await query(`UPDATE otp_requests SET attempts = attempts + 1 WHERE id = $1`, [row.id]);
+    if (hashedInput !== otpRecord.codeHash) {
+      // increment attempts and throw
+      await prisma.otpRequest.update({
+        where: { id: otpRecord.id },
+        data: { attempts: { increment: 1 } },
+      });
       throw new AppError('Invalid OTP', 400);
     }
 
-    await query(`UPDATE otp_requests SET is_used = true WHERE id = $1`, [row.id]);
-    res.json({ success: true, message: 'OTP verified successfully' });
+    // Mark OTP used
+    await prisma.otpRequest.update({
+      where: { id: otpRecord.id },
+      data: { isUsed: true },
+    });
+
+    // Behavior B: update registration status => APPROVED
+    const registration = await prisma.registration.update({
+      where: { id: registrationId },
+      data: { status: 'APPROVED' },
+      include: { event: true },
+    });
+
+    // Create a mock QR payload (JWT) and persist to qr_codes table
+    const payload = {
+      registrationId: registration.id,
+      eventId: registration.eventId,
+      iat: Math.floor(Date.now() / 1000),
+    };
+    const qrToken = jwt.sign(payload, QR_SECRET, { expiresIn: `${QR_EXPIRES_DAYS}d` });
+
+    // Save QR record
+    const expiresAt = new Date(Date.now() + QR_EXPIRES_DAYS * 24 * 60 * 60 * 1000);
+    const qrRecord = await prisma.qrCode.create({
+      data: {
+        registrationId: registration.id,
+        codeValue: qrToken,
+        imagePath: null, // TODO: generate PNG and store to S3 or disk
+        expiresAt,
+      },
+    });
+
+    logger.info(`✅ Registration ${registrationId} approved and QR created (${qrRecord.id})`);
+
+    res.json({
+      success: true,
+      message: 'OTP verified successfully',
+      data: {
+        registrationId: registration.id,
+        qr: {
+          token: qrToken,
+          expiresAt: expiresAt.toISOString(),
+          // For mock/demo purposes we include a trivial data URL placeholder
+          imagePlaceholder: `data:image/png;base64,${Buffer.from(`QR:${qrToken}`).toString('base64')}`,
+        },
+      },
+    });
   } catch (error) {
     next(error);
   }
 };
 
-// ==============================
-// Resend OTP
-// ==============================
+/**
+ * POST /otp/resend
+ * Body: { registrationId }
+ */
 export const resendOtp = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { registrationId } = req.body;
     if (!registrationId) throw new AppError('registrationId required', 400);
 
-    const otp = generateOTP();
-    const codeHash = hashOTP(otp);
-    const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + OTP_EXPIRY_MINUTES);
+    // Generate new OTP
+    const otp = (Math.floor(Math.random() * 900000) + 100000).toString();
+    const codeHash = crypto.createHash('sha256').update(otp).digest('hex');
+    const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-    await query(
-      `INSERT INTO otp_requests (registration_id, code_hash, expires_at, attempts, is_used, created_at)
-       VALUES ($1,$2,$3,0,false,NOW())`,
-      [registrationId, codeHash, expiresAt]
-    );
+    // Insert new otp request record
+    await prisma.otpRequest.create({
+      data: {
+        registrationId,
+        codeHash,
+        expiresAt,
+      },
+    });
 
-    const p = await query(
-      `SELECT p.contact 
-       FROM profiles p 
-       JOIN registrations r ON r.profile_id = p.id 
-       WHERE r.id = $1`,
-      [registrationId]
-    );
+    // Try to find a phone number to send to
+    const reg = await prisma.registration.findUnique({
+      where: { id: registrationId },
+      include: { profile: true },
+    });
 
-    const phone = p.rows[0]?.contact;
+    const phone = reg?.profile?.contact || (reg?.customValues && (reg.customValues as any).phone) || null;
     if (phone) {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const sms = require('../utils/sms');
-        if (sms && typeof sms.sendSMS === 'function') {
-          await sms.sendSMS(
-            phone,
-            `Your new OTP is ${otp}. It expires in ${OTP_EXPIRY_MINUTES} minutes.`
-          );
-        } else {
-          logger.info(`OTP resend for ${phone}: ${otp} (sms util not available)`);
-        }
+        const sent = await (await import('../utils/sms')).sendSMS(phone, `Your new OTP is ${otp}. It expires in ${OTP_EXPIRY_MINUTES} minutes.`);
+        if (sent) logger.info(`OTP resent to ${phone}`);
+        else logger.warn(`OTP resend failed for ${phone}`);
       } catch (err) {
-        logger.info(`OTP resend for ${phone}: ${otp} (sms send failed)`);
+        logger.warn(`OTP resend sendSMS error: ${err}`);
       }
     } else {
       logger.info(`Resent OTP for registration ${registrationId}: ${otp} (no phone)`);
