@@ -8,6 +8,7 @@ import { createServer } from 'http';
 import fs from 'fs';
 import path from 'path';
 import routes from './routes';
+import { generalLimiter, devLimiter } from './middleware/rateLimiters';
 
 import { logger } from './utils/logger';
 import { connectDatabase } from './config/database';
@@ -41,16 +42,11 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
-app.use(rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
-  message: {
-    error: 'Too many requests from this IP, please try again later.',
-    retryAfter: Math.ceil(parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000') / 1000),
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-}));
+if (process.env.NODE_ENV === 'production') {
+  app.use(generalLimiter);
+} else {
+  app.use(devLimiter);
+}
 
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
