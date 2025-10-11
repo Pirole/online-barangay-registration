@@ -1,7 +1,6 @@
 import express from 'express';
 import * as otpController from '../controllers/otp';
-import { validateRequest } from '../middleware/validateRequest';
-import { OTPVerifySchema } from '../utils/validation';
+import { validateRequest, OTPVerifySchema } from '../utils/validation';  // ✅ unified import
 
 const router = express.Router();
 
