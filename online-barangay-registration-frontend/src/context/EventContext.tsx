@@ -255,12 +255,17 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       const fd = new FormData();
       fd.append("eventId", eventId);
-      fd.append("firstName", formData.firstName);
-      fd.append("lastName", formData.lastName);
-      fd.append("age", String(formData.age));
-      fd.append("address", formData.address);
-      fd.append("barangay", formData.barangay);
-      fd.append("phone", formData.phone);
+      fd.append(
+        "customValues",
+        JSON.stringify({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          age: formData.age,
+          address: formData.address,
+          barangay: formData.barangay,
+          phone: formData.phone,
+        })
+      );
 
       if (formData.photo) {
         const byteString = atob(formData.photo.split(",")[1]);
