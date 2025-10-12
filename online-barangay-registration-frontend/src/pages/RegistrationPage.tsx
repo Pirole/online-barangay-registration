@@ -68,19 +68,38 @@ const RegistrationPage: React.FC = () => {
 
   /* ---------------- CAMERA ---------------- */
   const startCamera = async () => {
-    setCameraError("");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
-        setIsCameraActive(true);
-      }
-    } catch (err) {
-      console.error("Camera access error:", err);
-      setCameraError("Cannot access camera. Try another device or allow permission.");
+  console.log("▶️ Starting camera...");
+  setCameraError("");
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    console.log("🎥 Stream tracks:", stream.getTracks());
+
+    if (!videoRef.current) {
+      console.warn("⚠️ videoRef.current is NULL at the time of stream setup!");
     }
-  };
+
+    // Force mount the video before attaching
+    setIsCameraActive(true);
+
+    // Wait one tick for React to render <video>
+    setTimeout(() => {
+      if (videoRef.current) {
+        console.log("✅ videoRef now exists, attaching stream");
+        videoRef.current.srcObject = stream;
+        videoRef.current.muted = true;
+        videoRef.current.playsInline = true;
+        videoRef.current.play().catch((err) => console.warn("Autoplay blocked:", err));
+      } else {
+        console.warn("❌ videoRef still null even after render");
+      }
+    }, 300);
+  } catch (err) {
+    console.error("Camera access error:", err);
+    setCameraError("Cannot access camera. Please check your browser settings.");
+  }
+};
+
+
 
   const stopCamera = () => {
     if (videoRef.current?.srcObject) {
@@ -236,8 +255,8 @@ const RegistrationPage: React.FC = () => {
                   autoPlay
                   playsInline
                   muted
-                  className="w-full h-auto rounded-lg"
-                  style={{ transform: "scaleX(-1)" }}
+                  className="w-full h-auto rounded-lg bg-black"
+                  style={{ transform: "scaleX(-1)", minHeight: "240px" }} // 👈 ensures visibility
                 />
               </div>
             )}

@@ -1,7 +1,14 @@
 import multer from 'multer';
 import path from 'path';
+import fs from 'fs';
 import { AppError } from './errorHandler';
 
+const uploadDir = path.join(__dirname, "../uploads/photos");
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+  console.log("✅ Created uploads/photos directory automatically");
+}
 // Configure storage (local for now, later can swap to S3/Cloud)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
