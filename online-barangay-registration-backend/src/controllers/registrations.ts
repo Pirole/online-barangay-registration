@@ -83,13 +83,22 @@ export const createRegistrationInternal = async (opts: {
  * Controller: POST /registrations
  * Create a registration (step-based friendly). Uses createRegistrationInternal.
  */
+// src/controllers/registrations.ts
 export const createRegistration = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Expect validated data to be in req.validatedData OR raw body (fallback)
     const payload = (req as any).validatedData ?? req.body;
-    const { eventId, profileId, customValues } = payload;
+    const { eventId, profileId } = payload;
 
-    // Photo handling (if using multer or similar)
+    // ✅ Parse stringified customValues if needed
+    let customValues = payload.customValues;
+    if (typeof customValues === "string") {
+      try {
+        customValues = JSON.parse(customValues);
+      } catch {
+        customValues = {};
+      }
+    }
+
     const photoPath = (req as any).file ? (req as any).file.path : null;
 
     const { registration } = await createRegistrationInternal({
@@ -102,12 +111,13 @@ export const createRegistration = async (req: Request, res: Response, next: Next
     res.status(201).json({
       success: true,
       data: { registrationId: registration.id },
-      message: 'Registration created - OTP generated (sent via SMS if available)',
+      message: "Registration created - OTP generated (sent via SMS if available)",
     });
   } catch (error) {
     next(error);
   }
 };
+
 
 /**
  * Controller: finalize / submit registration (step-based)
