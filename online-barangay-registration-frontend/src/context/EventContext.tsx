@@ -249,46 +249,40 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   }, []);
 
-  const registerForEvent = useCallback(async (eventId: string, formData: any): Promise<any> => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const fd = new FormData();
-      fd.append("eventId", eventId);
-      fd.append(
-        "customValues",
-        JSON.stringify({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          age: formData.age,
-          address: formData.address,
-          barangay: formData.barangay,
-          phone: formData.phone,
-        })
-      );
+const registerForEvent = useCallback(async (
+  eventId: string,
+  formData: any
+): Promise<{ registrationId: string }> => {
+  const fd = new FormData();
+  fd.append("eventId", eventId);
+  fd.append(
+    "customValues",
+    JSON.stringify({
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      age: formData.age,
+      address: formData.address,
+      barangay: formData.barangay,
+      phone: formData.phone,
+    })
+  );
 
-      if (formData.photo) {
-        const byteString = atob(formData.photo.split(",")[1]);
-        const mimeString = formData.photo.split(",")[0].split(":")[1].split(";")[0];
-        const ab = new ArrayBuffer(byteString.length);
-        const ia = new Uint8Array(ab);
-        for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-        const blob = new Blob([ab], { type: mimeString });
-        fd.append("photo", blob, "photo.jpg");
-      }
+  if (formData.photo) {
+    const byteString = atob(formData.photo.split(",")[1]);
+    const mimeString = formData.photo.split(",")[0].split(":")[1].split(";")[0];
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+    const blob = new Blob([ab], { type: mimeString });
+    fd.append("photo", blob, "photo.jpg");
+  }
 
-      const response = await fetch(`${API_BASE}/registrations`, { method: "POST", body: fd });
-      if (!response.ok) throw new Error("Registration failed");
-      const data = await response.json();
-      return data.data;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Registration failed";
-      setError(msg);
-      throw new Error(msg);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const response = await fetch(`${API_BASE}/registrations`, { method: "POST", body: fd });
+  if (!response.ok) throw new Error("Registration failed");
+  const data = await response.json();
+  return data.data as { registrationId: string };
+}, []);
+
 
   const approveRegistrant = useCallback(async (registrationId: string): Promise<void> => {
     setIsLoading(true);
