@@ -12,7 +12,7 @@ const router = Router();
 router.post(
   '/',
   upload.single('photo'),
-  validateRequest(RegisterSchema),
+  //validateRequest(RegisterSchema),
   registrationsController.createRegistration
 );
 
