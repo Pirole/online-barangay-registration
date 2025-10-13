@@ -153,7 +153,8 @@ const RegistrationPage: React.FC = () => {
     setVerifying(true);
     try {
       const res = await fetch("http://localhost:5000/api/v1/otp/verify", {
-        method: "POST",
+        method: "POST", 
+        mode: "cors",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(otpData),
       });
