@@ -1,349 +1,353 @@
-// src/context/EventContext.tsx
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-  type ReactNode,
-} from "react";
-import { mapEvent } from "../utils/eventMapper";
-import type { FrontendEvent } from "../components/events/EventCard";
+import React, { useState, useEffect, useRef } from "react";
+import { useParams, Link } from "react-router-dom";
+import { useEvents } from "../context/EventContext";
 
-const API_BASE = "http://localhost:5000/api/v1";
-
-/* =====================
-   Interfaces
-   ===================== */
-export interface CustomField {
-  key: string;
-  label: string;
-  type: "text" | "number" | "select" | "checkbox" | "textarea";
-  required: boolean;
-  validation?: string;
-  options?: string[];
-}
-
-export interface BackendEvent {
-  id: string;
-  title: string;
-  description: string;
-  start_date: string;
-  end_date: string;
-  location: string;
-  capacity: number;
-  age_min?: number;
-  age_max?: number;
-  custom_fields: CustomField[];
-  manager_id: string;
-  allow_autocheckin: boolean;
-  status: "upcoming" | "ongoing" | "completed" | "cancelled";
-  created_at: string;
-  updated_at: string;
-  registration_count?: number;
-}
-
-export interface Registrant {
-  id: string;
-  event_id: string;
-  name: string;
+interface FormData {
+  firstName: string;
+  lastName: string;
   address: string;
-  age: number;
+  age: number | "";
   phone: string;
   barangay: string;
-  photo_path?: string;
-  custom_field_values: Record<string, any>;
-  status: "pending" | "approved" | "rejected" | "flagged";
-  qr_value?: string;
-  qr_image_path?: string;
-  created_at: string;
-  rejection_reason?: string;
+  photo: string;
 }
 
-/* =====================
-   Context Type
-   ===================== */
-interface EventContextType {
-  events: FrontendEvent[];
-  selectedEvent: FrontendEvent | null;
-  registrants: Registrant[];
-  isLoading: boolean;
-  error: string | null;
-
-  fetchEvents(params?: { status?: string; search?: string; page?: number; limit?: number }): Promise<void>;
-  fetchEventById(id: string): Promise<FrontendEvent | null>;
-  createEvent(eventData: Partial<FrontendEvent>): Promise<FrontendEvent>;
-  updateEvent(id: string, eventData: Partial<FrontendEvent>): Promise<FrontendEvent>;
-  deleteEvent(id: string): Promise<void>;
-
-  fetchRegistrants(eventId: string, params?: { status?: string }): Promise<void>;
-  registerForEvent(eventId: string, registrationData: any): Promise<{ registrationId: string }>;
-  approveRegistrant(registrationId: string): Promise<void>;
-  rejectRegistrant(registrationId: string, reason: string): Promise<void>;
-
-  clearError(): void;
-  setSelectedEvent(event: FrontendEvent | null): void;
+interface OtpData {
+  registrationId: string;
+  code: string;
 }
 
-const EventContext = createContext<EventContextType | undefined>(undefined);
+const RegistrationPage: React.FC = () => {
+  const { eventId } = useParams<{ eventId: string }>();
+  const { selectedEvent, fetchEventById, registerForEvent, isLoading } = useEvents();
 
-/* =====================
-   Helper Functions
-   ===================== */
-const handleResponse = async (res: Response) => {
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `Request failed with ${res.status}`);
-  }
-  return res.json();
-};
+  const [currentStep, setCurrentStep] = useState(1);
+  const [formData, setFormData] = useState<FormData>({
+    firstName: "",
+    lastName: "",
+    address: "",
+    age: "",
+    phone: "",
+    barangay: "",
+    photo: "",
+  });
+  const [otpData, setOtpData] = useState<OtpData>({ registrationId: "", code: "" });
+  const [qrCodeUrl, setQrCodeUrl] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [verifying, setVerifying] = useState(false);
 
-const getAuthHeaders = (isJson = true) => {
-  const headers: Record<string, string> = {};
-  const token = localStorage.getItem("auth_token");
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  if (isJson) headers["Content-Type"] = "application/json";
-  return headers;
-};
+  // Camera refs and states
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState("");
+  const [cameraError, setCameraError] = useState("");
 
-/* =====================
-   Provider
-   ===================== */
-export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [events, setEvents] = useState<FrontendEvent[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState<FrontendEvent | null>(null);
-  const [registrants, setRegistrants] = useState<Registrant[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const clearError = useCallback(() => setError(null), []);
-
-  /* ---------- EVENTS ---------- */
-  const fetchEvents = useCallback(async (params?: { status?: string; search?: string; page?: number; limit?: number }) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const query = new URLSearchParams();
-      if (params?.status) query.append("status", params.status);
-      if (params?.search) query.append("search", params.search);
-      if (params?.page) query.append("page", String(params.page));
-      if (params?.limit) query.append("limit", String(params.limit));
-
-      const res = await fetch(`${API_BASE}/events?${query}`);
-      const json = await handleResponse(res);
-      setEvents((json.data || []).map(mapEvent));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch events");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const fetchEventById = useCallback(async (id: string) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API_BASE}/events/${id}`);
-      const json = await handleResponse(res);
-      const event = mapEvent(json.data);
-      setSelectedEvent(event);
-      return event;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch event");
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const createEvent = useCallback(async (data: Partial<FrontendEvent>) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API_BASE}/events`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(data),
-      });
-      const json = await handleResponse(res);
-      const newEvent = mapEvent(json.data);
-      setEvents((prev) => [...prev, newEvent]);
-      return newEvent;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to create event";
-      setError(msg);
-      throw new Error(msg);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const updateEvent = useCallback(async (id: string, data: Partial<FrontendEvent>) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API_BASE}/events/${id}`, {
-        method: "PATCH",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(data),
-      });
-      const json = await handleResponse(res);
-      const updated = mapEvent(json.data);
-      setEvents((prev) => prev.map((e) => (e.id === id ? updated : e)));
-      if (selectedEvent?.id === id) setSelectedEvent(updated);
-      return updated;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to update event";
-      setError(msg);
-      throw new Error(msg);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedEvent]);
-
-  const deleteEvent = useCallback(async (id: string) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API_BASE}/events/${id}`, {
-        method: "DELETE",
-        headers: getAuthHeaders(false),
-      });
-      await handleResponse(res);
-      setEvents((prev) => prev.filter((e) => e.id !== id));
-      if (selectedEvent?.id === id) setSelectedEvent(null);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to delete event";
-      setError(msg);
-      throw new Error(msg);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedEvent]);
-
-  /* ---------- REGISTRANTS ---------- */
-  const fetchRegistrants = useCallback(async (eventId: string, params?: { status?: string }) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const query = new URLSearchParams();
-      if (params?.status) query.append("status", params.status);
-      const res = await fetch(`${API_BASE}/events/${eventId}/registrants?${query}`, {
-        headers: getAuthHeaders(false),
-      });
-      const json = await handleResponse(res);
-      setRegistrants(json.data || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch registrants");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const registerForEvent = useCallback(async (eventId: string, formData: any): Promise<{ registrationId: string }> => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const fd = new FormData();
-      fd.append("eventId", eventId);
-      fd.append("customValues", JSON.stringify({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        age: formData.age,
-        address: formData.address,
-        barangay: formData.barangay,
-        phone: formData.phone,
-      }));
-
-      if (formData.photo) {
-        const byteString = atob(formData.photo.split(",")[1]);
-        const mimeString = formData.photo.split(",")[0].split(":")[1].split(";")[0];
-        const ab = new ArrayBuffer(byteString.length);
-        const ia = new Uint8Array(ab);
-        for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-        const blob = new Blob([ab], { type: mimeString });
-        fd.append("photo", blob, "photo.jpg");
-      }
-
-      const res = await fetch(`${API_BASE}/registrations`, { method: "POST", body: fd });
-      const json = await handleResponse(res);
-      return json.data as { registrationId: string };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Registration failed";
-      setError(msg);
-      throw new Error(msg);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const approveRegistrant = useCallback(async (registrationId: string) => {
-    setIsLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/registrants/${registrationId}/approve`, {
-        method: "POST",
-        headers: getAuthHeaders(false),
-      });
-      await handleResponse(res);
-      setRegistrants((prev) =>
-        prev.map((r) => (r.id === registrationId ? { ...r, status: "approved" } : r))
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const rejectRegistrant = useCallback(async (registrationId: string, reason: string) => {
-    setIsLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/registrants/${registrationId}/reject`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ reason }),
-      });
-      await handleResponse(res);
-      setRegistrants((prev) =>
-        prev.map((r) =>
-          r.id === registrationId ? { ...r, status: "rejected", rejection_reason: reason } : r
-        )
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  /* ---------- INITIAL FETCH ---------- */
+  /* ---------------- FETCH EVENT ---------------- */
   useEffect(() => {
-    fetchEvents({ status: "upcoming" });
-  }, [fetchEvents]);
+    if (eventId) fetchEventById(eventId);
+  }, [eventId, fetchEventById]);
 
-  const value: EventContextType = {
-    events,
-    selectedEvent,
-    registrants,
-    isLoading,
-    error,
-    fetchEvents,
-    fetchEventById,
-    createEvent,
-    updateEvent,
-    deleteEvent,
-    fetchRegistrants,
-    registerForEvent,
-    approveRegistrant,
-    rejectRegistrant,
-    clearError,
-    setSelectedEvent,
+  /* ---------------- VALIDATION ---------------- */
+  const validatePhone = (phone: string) => /^(\+63|0)9\d{9}$/.test(phone);
+
+  const validateStep1 = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (!formData.firstName.trim()) errors.firstName = "First name is required";
+    if (!formData.lastName.trim()) errors.lastName = "Last name is required";
+    if (!formData.address.trim()) errors.address = "Address is required";
+    if (!formData.barangay.trim()) errors.barangay = "Barangay is required";
+    if (!formData.age || formData.age <= 0) errors.age = "Valid age is required";
+    if (!validatePhone(formData.phone)) errors.phone = "Invalid PH mobile number";
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
-  return <EventContext.Provider value={value}>{children}</EventContext.Provider>;
+  /* ---------------- CAMERA ---------------- */
+  const startCamera = async () => {
+    setCameraError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      setIsCameraActive(true);
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      }, 300);
+    } catch (err) {
+      console.error("Camera access error:", err);
+      setCameraError("Cannot access camera. Please check browser permissions.");
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current?.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach((t) => t.stop());
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+    setFormData((prev) => ({ ...prev, photo: dataUrl }));
+    setPhotoPreview(dataUrl);
+    stopCamera();
+  };
+
+  const retakePhoto = () => {
+    setFormData((prev) => ({ ...prev, photo: "" }));
+    setPhotoPreview("");
+    startCamera();
+  };
+
+  /* ---------------- OTP ---------------- */
+  const sendOtp = async () => {
+    if (!validateStep1()) return;
+    try {
+      const result = await registerForEvent(eventId!, formData);
+      setOtpData({ registrationId: result.registrationId, code: "" });
+      alert("✅ OTP generated and (mock) sent!");
+      setCurrentStep(3);
+    } catch (err) {
+      alert("Failed to send OTP. Try again.");
+      console.error(err);
+    }
+  };
+
+  const verifyOtp = async () => {
+    if (!otpData.code.trim()) {
+      setOtpError("Please enter OTP");
+      return;
+    }
+    setVerifying(true);
+    setOtpError("");
+    try {
+      const res = await fetch("http://localhost:5000/api/v1/otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(otpData),
+      });
+
+      if (!res.ok) throw new Error("Invalid OTP");
+      const data = await res.json();
+
+      if (data.data?.qr_image_path)
+        setQrCodeUrl(`http://localhost:5000${data.data.qr_image_path}`);
+      else if (data.data?.qr_value)
+        setQrCodeUrl(data.data.qr_value);
+
+      setCurrentStep(4);
+    } catch {
+      setOtpError("Invalid or expired OTP");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  /* ---------------- UI ---------------- */
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-gray-600">
+        Loading event...
+      </div>
+    );
+  }
+
+  if (!selectedEvent) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center">
+        <h2 className="text-lg font-semibold mb-4">Event not found</h2>
+        <Link to="/events" className="text-blue-600 underline">
+          Back to Events
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-xl mx-auto bg-white shadow rounded-lg p-6">
+        <h2 className="text-2xl font-bold text-center mb-6">
+          Register for {selectedEvent.title}
+        </h2>
+
+        {/* Step indicator */}
+        <div className="flex justify-between mb-8">
+          {["Details", "Photo", "OTP", "QR"].map((label, i) => (
+            <div
+              key={label}
+              className={`flex-1 text-center text-sm font-medium ${
+                i + 1 <= currentStep ? "text-blue-600" : "text-gray-400"
+              }`}
+            >
+              {label}
+            </div>
+          ))}
+        </div>
+
+        {/* Step 1: Details */}
+        {currentStep === 1 && (
+          <div className="space-y-3">
+            {["firstName", "lastName", "age", "address", "barangay", "phone"].map((field) => (
+              <div key={field}>
+                <input
+                  type={field === "age" ? "number" : "text"}
+                  name={field}
+                  placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
+                  value={(formData as any)[field]}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, [field]: e.target.value }))
+                  }
+                  className="w-full border rounded p-2"
+                />
+                {validationErrors[field] && (
+                  <p className="text-red-500 text-sm">{validationErrors[field]}</p>
+                )}
+              </div>
+            ))}
+            <button
+              onClick={() => validateStep1() && setCurrentStep(2)}
+              className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+            >
+              Continue
+            </button>
+          </div>
+        )}
+
+        {/* Step 2: Photo */}
+        {currentStep === 2 && (
+          <div className="text-center">
+            {isCameraActive && (
+              <div className="relative w-full max-w-md mx-auto bg-black rounded-lg overflow-hidden mb-4">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-auto rounded-lg bg-black"
+                  style={{ transform: "scaleX(-1)", minHeight: "240px" }}
+                />
+              </div>
+            )}
+
+            {photoPreview && !isCameraActive && (
+              <div className="w-full max-w-md mx-auto mb-4">
+                <img
+                  src={photoPreview}
+                  alt="Captured"
+                  className="w-full h-auto rounded-lg shadow"
+                />
+              </div>
+            )}
+
+            {cameraError && (
+              <p className="text-red-500 text-sm mb-3">{cameraError}</p>
+            )}
+
+            <div className="flex justify-center space-x-4">
+              {!isCameraActive && !photoPreview && (
+                <button
+                  onClick={startCamera}
+                  className="bg-blue-600 text-white px-5 py-2 rounded hover:bg-blue-700"
+                >
+                  Start Camera
+                </button>
+              )}
+              {isCameraActive && (
+                <button
+                  onClick={capturePhoto}
+                  className="bg-green-600 text-white px-5 py-2 rounded hover:bg-green-700"
+                >
+                  Capture
+                </button>
+              )}
+              {photoPreview && !isCameraActive && (
+                <button
+                  onClick={retakePhoto}
+                  className="bg-yellow-500 text-white px-5 py-2 rounded hover:bg-yellow-600"
+                >
+                  Retake
+                </button>
+              )}
+            </div>
+
+            <canvas ref={canvasRef} className="hidden" />
+
+            {photoPreview && (
+              <div className="mt-6">
+                <button
+                  onClick={sendOtp}
+                  className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
+                >
+                  Continue
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Step 3: OTP */}
+        {currentStep === 3 && (
+          <div className="text-center space-y-4">
+            <p>Enter the OTP sent to your phone:</p>
+            <input
+              type="text"
+              value={otpData.code}
+              onChange={(e) =>
+                setOtpData((prev) => ({ ...prev, code: e.target.value }))
+              }
+              className="w-full border p-2 rounded text-center"
+              placeholder="Enter 6-digit OTP"
+            />
+            {otpError && <p className="text-red-500 text-sm">{otpError}</p>}
+            <button
+              onClick={verifyOtp}
+              disabled={verifying}
+              className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+            >
+              {verifying ? "Verifying..." : "Verify OTP"}
+            </button>
+          </div>
+        )}
+
+        {/* Step 4: QR */}
+        {currentStep === 4 && (
+          <div className="text-center space-y-4">
+            <h3 className="text-xl font-semibold text-green-600">
+              Registration Successful!
+            </h3>
+            {qrCodeUrl ? (
+              <img src={qrCodeUrl} alt="QR Code" className="mx-auto w-40 h-40" />
+            ) : (
+              <p>No QR Code available</p>
+            )}
+            <p className="text-gray-600">
+              Show this QR during the event for verification.
+            </p>
+            <Link
+              to="/events"
+              className="block bg-blue-600 text-white py-2 rounded mt-4"
+            >
+              Back to Events
+            </Link>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
-/* =====================
-   Hook
-   ===================== */
-export const useEvents = (): EventContextType => {
-  const context = useContext(EventContext);
-  if (!context) throw new Error("useEvents must be used within an EventProvider");
-  return context;
-};
+export default RegistrationPage;
