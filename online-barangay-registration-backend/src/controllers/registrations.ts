@@ -117,8 +117,6 @@ export const createRegistration = async (req: Request, res: Response, next: Next
     next(error);
   }
 };
-
-
 /**
  * Controller: finalize / submit registration (step-based)
  * POST /registrations/submit
