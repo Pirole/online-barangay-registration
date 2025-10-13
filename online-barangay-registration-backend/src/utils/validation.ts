@@ -5,15 +5,50 @@ import { z, ZodError, ZodSchema } from "zod";
 const phoneRegex = /^(\+63|0)9\d{9}$/;
 
 export const RegisterSchema = z.object({
-  eventId: z.string().min(1, "Event ID required"),  // instead of uuid()
+  eventId: z.string().min(1, "Event ID required"),
+
   firstName: z.string().min(1, "First name required"),
   lastName: z.string().min(1, "Last name required"),
-  age: z.number().int().positive(),
-  address: z.string().min(1),
-  barangay: z.string().min(1),
-  phone: z.string().min(10),
-  photoTempId: z.string().optional()
+
+  age: z.preprocess(
+    (val) => {
+      if (typeof val === "string" && val.trim() !== "") return Number(val);
+      return val;
+    },
+    z.number().int().positive({ message: "Age must be a positive number" })
+  ),
+
+  address: z.string().min(1, "Address is required"),
+  barangay: z.string().min(1, "Barangay is required"),
+
+  phone: z
+    .preprocess(
+      (val) => (typeof val === "string" ? val.trim() : val),
+      z
+        .string()
+        .min(10, "Phone must have at least 10 digits")
+        .regex(/^(\+63|0)9\d{9}$/, "Invalid Philippine phone number format")
+    )
+    .optional(),
+
+  photoTempId: z.string().optional(),
+
+  // ✅ Fixed z.record() for your Zod v4 version
+  customValues: z
+    .union([
+      z.string().refine((val) => {
+        try {
+          JSON.parse(val);
+          return true;
+        } catch {
+          return false;
+        }
+      }, "Invalid JSON for customValues"),
+      z.record(z.string(), z.any()), // <-- fix here
+    ])
+    .optional(),
 });
+
 
 export const LoginSchema = z.object({
   email: z.string().email("Invalid email format"),
