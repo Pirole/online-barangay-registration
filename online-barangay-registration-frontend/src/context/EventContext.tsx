@@ -86,9 +86,9 @@ interface EventContextType {
     params?: { status?: string }
   ) => Promise<void>;
   registerForEvent: (
-    eventId: string,
-    registrationData: any
-  ) => Promise<Registrant>;
+  eventId: string,
+  registrationData: any
+) => Promise<{ registrationId: string }>;
   approveRegistrant: (registrationId: string) => Promise<void>;
   rejectRegistrant: (registrationId: string, reason: string) => Promise<void>;
 
