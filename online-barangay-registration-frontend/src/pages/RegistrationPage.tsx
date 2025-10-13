@@ -137,7 +137,7 @@ const RegistrationPage: React.FC = () => {
     if (!validateStep1()) return;
     try {
       const result = await registerForEvent(eventId!, formData);
-      setOtpData({ registrationId: result.id, code: "" });
+      setOtpData({ registrationId: result.registrationId, code: "" });
       alert("OTP sent to your phone!");
       setCurrentStep(3);
     } catch {
