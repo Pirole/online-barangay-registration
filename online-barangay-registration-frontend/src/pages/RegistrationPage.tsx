@@ -336,28 +336,49 @@ const RegistrationPage: React.FC = () => {
           </div>
         )}
 
-        {/* Step 4: QR */}
-        {currentStep === 4 && (
-          <div className="text-center space-y-4">
-            <h3 className="text-xl font-semibold text-green-600">
-              Registration Successful!
-            </h3>
-            {qrCodeUrl ? (
-              <img src={qrCodeUrl} alt="QR Code" className="mx-auto w-40 h-40" />
-            ) : (
-              <p>No QR Code available</p>
-            )}
-            <p className="text-gray-600">
-              Show this QR during the event for verification.
-            </p>
-            <Link
-              to="/events"
-              className="block bg-blue-600 text-white py-2 rounded mt-4"
-            >
-              Back to Events
-            </Link>
-          </div>
-        )}
+        {/* Step 4: QR Display */}
+{currentStep === 4 && (
+  <div className="text-center space-y-4">
+    <h3 className="text-xl font-semibold text-green-600">
+      Registration Successful!
+    </h3>
+
+    {qrCodeUrl ? (
+<img
+  src={qrCodeUrl}
+  alt="QR Code"
+  className="mx-auto w-40 h-40 object-contain border rounded-lg shadow"
+  onError={(e) => {
+    const img = e.target as HTMLImageElement; // 👈 Type assertion fixes the TS error
+    console.error("⚠️ Failed to load QR image:", img.src);
+
+    // Hide the broken image
+    img.style.display = "none";
+
+    // Create a fallback <p> message safely
+    const fallback = document.createElement("p");
+    fallback.textContent = "Unable to load QR Code";
+    img.parentElement?.appendChild(fallback); // 👈 use parentElement (type-safe)
+  }}
+/>
+
+    ) : (
+      <p className="text-gray-500 italic">No QR Code available.</p>
+    )}
+
+    <p className="text-gray-600">
+      Show this QR during the event for verification.
+    </p>
+
+    <Link
+      to="/events"
+      className="block bg-blue-600 text-white py-2 rounded mt-4 hover:bg-blue-700 transition"
+    >
+      Back to Events
+    </Link>
+  </div>
+)}
+
       </div>
     </div>
   );
