@@ -26,17 +26,17 @@ const API_VERSION = process.env.API_VERSION || 'v1';
 // ================================================
 // MIDDLEWARE SETUP
 // ================================================
-app.use(helmet({
-  crossOriginEmbedderPolicy: false,
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
+helmet({
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", "data:", "https:", "http://localhost:5000"], // ✅ add this line
+      },
     },
-  },
-}));
+  })
 
 app.use(cors({
   origin: "http://localhost:5173",  // or "*" for all origins (not recommended in production)
@@ -64,19 +64,14 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestLogger);
 app.use(
-  helmet({
-    crossOriginEmbedderPolicy: false,
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'"],
-        imgSrc: ["'self'", "data:", "https:", "http://localhost:5000"], // ✅ add this line
-      },
-    },
-  })
+  "/uploads",
+  cors({
+    origin: ["http://localhost:5173", "http://localhost:3000"], // 👈 match your frontend URL
+    methods: ["GET"],
+    allowedHeaders: ["Content-Type"],
+  }),
+  express.static("uploads")
 );
-
 
 // ================================================
 // HEALTH CHECK
