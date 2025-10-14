@@ -9,3 +9,5 @@ uploads/
 .DS_Store
 coverage/
 /src/generated/prisma
+prisma/migrations/
+prisma/seed.ts
