@@ -17,9 +17,7 @@ const LoginPage: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated) {
       const storedRole = localStorage.getItem('user_role');
-      if (storedRole === 'SUPER_ADMIN' || storedRole === 'EVENT_MANAGER') {
-        navigate('/admin', { replace: true });
-      } else if (storedRole === 'STAFF') {
+      if (storedRole === 'SUPER_ADMIN' || storedRole === 'EVENT_MANAGER' || storedRole === 'STAFF') {
         navigate('/admin', { replace: true });
       } else {
         navigate('/events', { replace: true });
@@ -33,22 +31,17 @@ const LoginPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const success = await login(email, password);
+      // Attempt login; if it throws, catch will handle it
+      await login(email, password);
 
-      if (success) {
-        const role = localStorage.getItem('user_role');
-
-        // ✅ Role-based redirection
-        if (role === 'SUPER_ADMIN' || role === 'EVENT_MANAGER') {
-          navigate('/admin');
-        } else if (role === 'STAFF') {
-          navigate('/admin');
-        } else {
-          navigate('/events');
-        }
+      // Successful login → redirect by role
+      const role = localStorage.getItem('user_role');
+      if (role === 'SUPER_ADMIN' || role === 'EVENT_MANAGER' || role === 'STAFF') {
+        navigate('/admin');
       } else {
-        setError('Invalid email or password.');
+        navigate('/events');
       }
+
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Login failed. Please check your credentials.'
@@ -68,7 +61,8 @@ const LoginPage: React.FC = () => {
         <div className="flex justify-center">
           <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center">
             <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
           </div>
         </div>
@@ -108,9 +102,7 @@ const LoginPage: React.FC = () => {
                   placeholder="admin@example.com"
                 />
                 {email && !validateEmail(email) && (
-                  <p className="mt-1 text-sm text-red-600">
-                    Please enter a valid email address
-                  </p>
+                  <p className="mt-1 text-sm text-red-600">Please enter a valid email address</p>
                 )}
               </div>
             </div>
@@ -167,6 +159,7 @@ const LoginPage: React.FC = () => {
                   Remember me
                 </label>
               </div>
+
               <div className="text-sm">
                 <a href="#" className="font-medium text-blue-600 hover:text-blue-500">
                   Nakalimutan ang password?
@@ -211,7 +204,6 @@ const LoginPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Back to Home */}
         <div className="mt-6 text-center">
           <Link to="/" className="text-blue-600 hover:text-blue-700 text-sm font-medium">
             ← Back to Events
