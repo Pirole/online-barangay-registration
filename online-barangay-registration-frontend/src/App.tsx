@@ -10,11 +10,11 @@ import RegistrationPage from './pages/RegistrationPage';
 import LoginPage from './pages/LoginPage';
 
 // Admin Pages
-//import AdminDashboard from './pages/admin/AdminDashboard';
-//import EventManagement from './pages/admin/EventManagement';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import EventManagement from './pages/admin/EventManagement';
 
 // Components
-// import AuthGuard from './components/layout/AuthGuard';
+import AuthGuard from './components/layout/AuthGuard';
 
 function App() {
   return (
