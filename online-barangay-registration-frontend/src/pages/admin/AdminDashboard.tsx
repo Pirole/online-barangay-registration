@@ -41,30 +41,34 @@ const AdminDashboard: React.FC = () => {
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    const load = async () => {
+    const load = async (): Promise<void> => {
       try {
         setLoadingEvents(true);
         setError(null);
-        // If event manager, optionally pass managerId query param if backend supports it:
+
         const eventsResp = await apiFetch(
-          role === "EVENT_MANAGER" && user?.id ? `/events?managerId=${user.id}` : "/events",
+          role === "EVENT_MANAGER" && user?.id
+            ? `/events?managerId=${user.id}`
+            : "/events",
           {},
           token
         );
-        // expect eventsResp.data = array
-        const evts = (eventsResp?.data || []).map((e: any) => ({
+
+        const evts: ShortEvent[] = (eventsResp?.data || []).map((e: any) => ({
           id: e.id,
           title: e.title,
           start_date: e.startDate || e.start_date,
           end_date: e.endDate || e.end_date,
           location: e.location,
-          registration_count: e.registrationCount || e.registration_count || 0,
+          registration_count:
+            e.registrationCount || e.registration_count || 0,
         }));
+
         setEvents(evts);
         setStats((s) => ({ ...s, totalEvents: evts.length }));
-      } catch (err: any) {
-        console.error("Failed loading events", err);
-        setError(err.message || "Failed to load events");
+      } catch (error: any) {
+        console.error("Failed loading events", error);
+        setError(error.message || "Failed to load events");
       } finally {
         setLoadingEvents(false);
       }
@@ -74,41 +78,61 @@ const AdminDashboard: React.FC = () => {
   }, [role, token, user?.id, refreshKey]);
 
   useEffect(() => {
-    const loadRegs = async () => {
+    const loadRegs = async (): Promise<void> => {
       try {
         setLoadingRegs(true);
         setError(null);
 
-        // Option A: fetch pending registrants across events
-        const resp = await apiFetch("/registrations?status=pending&limit=50", {}, token).catch(async (err) => {
-          // fallback: try event-specific endpoints (some backends use /events/:id/registrants)
-          // If your backend doesn't support global pending query, gather per-event
+        const resp = await apiFetch(
+          "/registrations?status=pending&limit=50",
+          {},
+          token
+        ).catch(async () => {
+          // fallback: try per-event fetch if global route unavailable
           if (events.length === 0) return { data: [] };
           const arr: any[] = [];
           for (const e of events) {
             try {
-              const r = await apiFetch(`/events/${e.id}/registrants?status=pending`, {}, token);
-              (r.data || []).forEach((x: any) => arr.push({ ...x, eventTitle: e.title, eventId: e.id }));
-            } catch {}
+              const r = await apiFetch(
+                `/events/${e.id}/registrants?status=pending`,
+                {},
+                token
+              );
+              (r.data || []).forEach((reg: any) =>
+                arr.push({ ...reg, eventTitle: e.title, eventId: e.id })
+              );
+            } catch {
+              /* ignore */
+            }
           }
           return { data: arr };
         });
 
-        const regs = (resp?.data || []).map((r: any) => ({
+        const regs: RegistrantRow[] = (resp?.data || []).map((r: any) => ({
           id: r.id,
           eventId: r.eventId ?? r.event_id,
           eventTitle: r.eventTitle ?? (r.event?.title || ""),
-          profile: r.profile ?? { firstName: r.firstName, lastName: r.lastName, barangay: r.barangay },
+          profile: r.profile ?? {
+            firstName: r.firstName,
+            lastName: r.lastName,
+            barangay: r.barangay,
+          },
           customValues: r.customValues ?? r.custom_field_values,
           status: (r.status || r.state || "pending").toLowerCase(),
           created_at: r.createdAt || r.created_at,
         }));
 
         setRegistrants(regs);
-        setStats((s) => ({ ...s, totalRegistrants: regs.length, pendingApprovals: regs.filter(r => r.status === "pending").length }));
-      } catch (err: any) {
-        console.error("Failed loading registrants", err);
-        setError(err.message || "Failed to load registrants");
+        setStats((s) => ({
+          ...s,
+          totalRegistrants: regs.length,
+          pendingApprovals: regs.filter(
+            (reg) => reg.status === "pending"
+          ).length,
+        }));
+      } catch (error: any) {
+        console.error("Failed loading registrants", error);
+        setError(error.message || "Failed to load registrants");
       } finally {
         setLoadingRegs(false);
       }
@@ -118,40 +142,54 @@ const AdminDashboard: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events, token, refreshKey]);
 
-  const refresh = () => setRefreshKey(k => k + 1);
+  const refresh = (): void => setRefreshKey((k) => k + 1);
 
-  const approveRegistrant = async (id: string) => {
+  const approveRegistrant = async (id: string): Promise<void> => {
     if (!confirm("Approve this registrant?")) return;
     try {
       await apiFetch(`/registrants/${id}/approve`, { method: "POST" }, token);
       refresh();
-    } catch (err: any) {
-      alert(err.message || "Approve failed");
+    } catch (error: any) {
+      alert(error.message || "Approve failed");
     }
   };
 
-  const rejectRegistrant = async (id: string) => {
+  const rejectRegistrant = async (id: string): Promise<void> => {
     const reason = prompt("Reason for rejection (optional):") || "";
     try {
-      await apiFetch(`/registrants/${id}/reject`, {
-        method: "POST",
-        body: JSON.stringify({ reason }),
-      }, token);
+      await apiFetch(
+        `/registrants/${id}/reject`,
+        {
+          method: "POST",
+          body: JSON.stringify({ reason }),
+        },
+        token
+      );
       refresh();
-    } catch (err: any) {
-      alert(err.message || "Reject failed");
+    } catch (error: any) {
+      alert(error.message || "Reject failed");
     }
   };
 
-  const pending = useMemo(() => registrants.filter(r => r.status === "pending"), [registrants]);
+  const pending = useMemo(
+    () => registrants.filter((r) => r.status === "pending"),
+    [registrants]
+  );
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
         <div className="flex items-center space-x-3">
-          <span className="text-sm text-gray-600">Role: <strong>{role || "unknown"}</strong></span>
-          <button onClick={refresh} className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700">Refresh</button>
+          <span className="text-sm text-gray-600">
+            Role: <strong>{role || "unknown"}</strong>
+          </span>
+          <button
+            onClick={refresh}
+            className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+          >
+            Refresh
+          </button>
         </div>
       </div>
 
@@ -164,7 +202,7 @@ const AdminDashboard: React.FC = () => {
           <div className="text-2xl font-bold">{stats.totalEvents}</div>
         </div>
         <div className="p-4 bg-white rounded shadow">
-          <div className="text-sm text-gray-500">Total Registrants (fetched)</div>
+          <div className="text-sm text-gray-500">Total Registrants</div>
           <div className="text-2xl font-bold">{stats.totalRegistrants}</div>
         </div>
         <div className="p-4 bg-white rounded shadow">
@@ -177,7 +215,9 @@ const AdminDashboard: React.FC = () => {
       <section className="mb-6 bg-white p-4 rounded shadow">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-medium">Events</h2>
-          <div className="text-sm text-gray-500">{loadingEvents ? "Loading..." : `${events.length} events`}</div>
+          <div className="text-sm text-gray-500">
+            {loadingEvents ? "Loading..." : `${events.length} events`}
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -191,15 +231,25 @@ const AdminDashboard: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {events.map(evt => (
+              {events.map((evt) => (
                 <tr key={evt.id} className="border-t">
                   <td className="py-2">{evt.title}</td>
                   <td>{evt.location}</td>
-                  <td>{evt.start_date ? new Date(evt.start_date).toLocaleString() : "-"}</td>
+                  <td>
+                    {evt.start_date
+                      ? new Date(evt.start_date).toLocaleString()
+                      : "-"}
+                  </td>
                   <td>{evt.registration_count ?? 0}</td>
                 </tr>
               ))}
-              {events.length === 0 && !loadingEvents && <tr><td colSpan={4} className="p-4 text-gray-500">No events found.</td></tr>}
+              {events.length === 0 && !loadingEvents && (
+                <tr>
+                  <td colSpan={4} className="p-4 text-gray-500">
+                    No events found.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -209,7 +259,9 @@ const AdminDashboard: React.FC = () => {
       <section className="bg-white p-4 rounded shadow">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-medium">Pending Registrants</h2>
-          <div className="text-sm text-gray-500">{loadingRegs ? "Loading..." : `${pending.length} pending`}</div>
+          <div className="text-sm text-gray-500">
+            {loadingRegs ? "Loading..." : `${pending.length} pending`}
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -224,24 +276,53 @@ const AdminDashboard: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {pending.map(row => {
-                const name = `${row.profile?.firstName || ""} ${row.profile?.lastName || ""}`.trim() || row.customValues?.firstName || "Unnamed";
+              {pending.map((row) => {
+                const name =
+                  `${row.profile?.firstName || ""} ${
+                    row.profile?.lastName || ""
+                  }`.trim() ||
+                  row.customValues?.firstName ||
+                  "Unnamed";
                 return (
                   <tr className="border-t" key={row.id}>
                     <td className="py-2">{name}</td>
                     <td>{row.eventTitle || row.eventId}</td>
-                    <td>{row.profile?.barangay || row.customValues?.barangay || "-"}</td>
-                    <td>{row.created_at ? new Date(row.created_at).toLocaleString() : "-"}</td>
+                    <td>
+                      {row.profile?.barangay ||
+                        row.customValues?.barangay ||
+                        "-"}
+                    </td>
+                    <td>
+                      {row.created_at
+                        ? new Date(row.created_at).toLocaleString()
+                        : "-"}
+                    </td>
                     <td className="text-right">
                       <div className="inline-flex gap-2">
-                        <button onClick={() => approveRegistrant(row.id)} className="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700">Approve</button>
-                        <button onClick={() => rejectRegistrant(row.id)} className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700">Reject</button>
+                        <button
+                          onClick={() => approveRegistrant(row.id)}
+                          className="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => rejectRegistrant(row.id)}
+                          className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                        >
+                          Reject
+                        </button>
                       </div>
                     </td>
                   </tr>
                 );
               })}
-              {pending.length === 0 && !loadingRegs && <tr><td colSpan={5} className="p-4 text-gray-500">No pending registrants.</td></tr>}
+              {pending.length === 0 && !loadingRegs && (
+                <tr>
+                  <td colSpan={5} className="p-4 text-gray-500">
+                    No pending registrants.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
