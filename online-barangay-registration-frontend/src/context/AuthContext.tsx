@@ -1,11 +1,16 @@
-// src/context/AuthContext.tsx
-import React, { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  type ReactNode,
+} from "react";
 
 export interface User {
   id: string;
   email: string;
   name: string;
-  role: "SUPER_ADMIN" | "EVENT_MANAGER" | "STAFF";
+  role: "SUPER_ADMIN" | "EVENT_MANAGER" | "STAFF" | string;
   barangay?: string;
   phone?: string;
 }
@@ -16,7 +21,7 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   userRole: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   hasRole: (roles: string[]) => boolean;
 }
@@ -28,7 +33,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restore session
+  // 🔄 Restore session on mount
   useEffect(() => {
     const savedToken = localStorage.getItem("auth_token");
     const savedUser = localStorage.getItem("auth_user");
@@ -42,15 +47,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error("⚠️ Failed to parse saved user:", err);
         localStorage.removeItem("auth_token");
         localStorage.removeItem("auth_user");
+        localStorage.removeItem("user_role");
       }
     }
 
     setIsLoading(false);
   }, []);
 
-  // 🔐 Login handler
-  const login = async (email: string, password: string): Promise<void> => {
-    setIsLoading(true);
+  // 🔐 Login handler — patched for both response shapes
+  const login = async (email: string, password: string): Promise<boolean> => {
     try {
       const response = await fetch("http://localhost:5000/api/v1/auth/login", {
         method: "POST",
@@ -58,32 +63,39 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         body: JSON.stringify({ email, password }),
       });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.message || "Invalid email or password");
-      }
-
       const data = await response.json();
 
-      // Normalize role to lowercase
+      // ✅ Handle both backend shapes
+      const userDataRaw = data.user || data.data?.user;
+      const tokenData = data.token || data.data?.token;
+
+      if (!userDataRaw || !tokenData) {
+        console.error("Invalid backend response:", data);
+        throw new Error("Invalid server response — missing user or token");
+      }
+
+      // ✅ Normalize role safely
+      const normalizedRole =
+        typeof userDataRaw.role === "string"
+          ? userDataRaw.role.toLowerCase()
+          : "staff";
+
       const userData: User = {
-        ...data.user,
-        role: data.user.role.toLowerCase(),
+        ...userDataRaw,
+        role: normalizedRole,
       };
 
+      // ✅ Update state and persist
       setUser(userData);
-      setToken(data.token);
-
-      localStorage.setItem("auth_token", data.token);
+      setToken(tokenData);
+      localStorage.setItem("auth_token", tokenData);
       localStorage.setItem("auth_user", JSON.stringify(userData));
-      localStorage.setItem("user_role", userData.role);
+      localStorage.setItem("user_role", normalizedRole);
 
-      console.log(`✅ Logged in as ${userData.role}`);
+      return true;
     } catch (error) {
       console.error("Login error:", error);
-      throw error;
-    } finally {
-      setIsLoading(false);
+      return false;
     }
   };
 
@@ -103,9 +115,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  // 🧠 Derived helpers
   const isAuthenticated = !!user && !!token;
   const userRole = user?.role || localStorage.getItem("user_role");
-  const hasRole = (roles: string[]): boolean => (userRole ? roles.includes(userRole) : false);
+  const hasRole = (roles: string[]): boolean =>
+    userRole ? roles.includes(userRole) : false;
 
   const value: AuthContextType = {
     user,
@@ -121,6 +135,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
+// 🔧 Hook
 export const useAuth = (): AuthContextType => {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
