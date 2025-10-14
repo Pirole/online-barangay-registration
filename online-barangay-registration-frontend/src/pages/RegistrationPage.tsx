@@ -128,34 +128,39 @@ const RegistrationPage: React.FC = () => {
   };
 
   const verifyOtp = async () => {
-    if (!otpData.code.trim()) {
-      setOtpError("Please enter OTP");
-      return;
+  if (!otpData.code.trim()) {
+    setOtpError("Please enter OTP");
+    return;
+  }
+  setVerifying(true);
+  setOtpError("");
+  try {
+    const res = await fetch("http://localhost:5000/api/v1/otp/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(otpData),
+    });
+
+    if (!res.ok) throw new Error("Invalid OTP");
+    const data = await res.json();
+
+    // ✅ Adjusted to match backend
+    const qr = data.data?.qr;
+    if (qr?.imagePlaceholder) {
+      setQrCodeUrl(qr.imagePlaceholder);
+    } else if (qr?.token) {
+      // fallback: create a QR-like visual if only token exists
+      setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?data=${qr.token}`);
     }
-    setVerifying(true);
-    setOtpError("");
-    try {
-      const res = await fetch("http://localhost:5000/api/v1/otp/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(otpData),
-      });
 
-      if (!res.ok) throw new Error("Invalid OTP");
-      const data = await res.json();
+    setCurrentStep(4);
+  } catch {
+    setOtpError("Invalid or expired OTP");
+  } finally {
+    setVerifying(false);
+  }
+};
 
-      if (data.data?.qr_image_path)
-        setQrCodeUrl(`http://localhost:5000${data.data.qr_image_path}`);
-      else if (data.data?.qr_value)
-        setQrCodeUrl(data.data.qr_value);
-
-      setCurrentStep(4);
-    } catch {
-      setOtpError("Invalid or expired OTP");
-    } finally {
-      setVerifying(false);
-    }
-  };
 
   /* ---------------- UI ---------------- */
   if (isLoading) {
