@@ -20,7 +20,7 @@ const LoginPage: React.FC = () => {
       if (storedRole === 'SUPER_ADMIN' || storedRole === 'EVENT_MANAGER' || storedRole === 'STAFF') {
         navigate('/admin', { replace: true });
       } else {
-        navigate('/events', { replace: true });
+        navigate('/dashboard', { replace: true });
       }
     }
   }, [isAuthenticated, navigate, location]);

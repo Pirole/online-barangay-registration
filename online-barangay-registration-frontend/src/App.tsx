@@ -15,7 +15,7 @@ import EventManagement from './pages/admin/EventManagement';
 import UserManagement from './pages/admin/UserManagement';
 import AuditLogs from './pages/admin/AuditLogs';
 
-
+  
 // Components
 import AuthGuard from './components/layout/AuthGuard';
 
