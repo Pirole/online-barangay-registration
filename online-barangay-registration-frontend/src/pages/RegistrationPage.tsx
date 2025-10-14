@@ -128,34 +128,47 @@ const RegistrationPage: React.FC = () => {
   };
 
   const verifyOtp = async () => {
-    if (!otpData.code.trim()) {
-      setOtpError("Please enter OTP");
-      return;
+  if (!otpData.code.trim()) {
+    setOtpError("Please enter OTP");
+    return;
+  }
+
+  setVerifying(true);
+  setOtpError("");
+
+  try {
+    const backendBase = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
+    const res = await fetch(`${backendBase}/api/v1/otp/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(otpData),
+    });
+
+    if (!res.ok) throw new Error("Invalid OTP");
+
+    const data = await res.json();
+    console.log("🔍 OTP Verify Response:", data);
+
+    if (data.data?.qr_image_path) {
+      const url = `${backendBase}${data.data.qr_image_path}`;
+      console.log("✅ Final QR URL:", url);
+      setQrCodeUrl(url);
+    } else if (data.data?.qr_value) {
+      console.log("⚠️ Fallback QR Value:", data.data.qr_value);
+      setQrCodeUrl(data.data.qr_value);
+    } else {
+      console.warn("❌ No QR path or value returned from backend");
     }
-    setVerifying(true);
-    setOtpError("");
-    try {
-      const res = await fetch("http://localhost:5000/api/v1/otp/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(otpData),
-      });
 
-      if (!res.ok) throw new Error("Invalid OTP");
-      const data = await res.json();
-
-      if (data.data?.qr_image_path)
-        setQrCodeUrl(`http://localhost:5000${data.data.qr_image_path}`);
-      else if (data.data?.qr_value)
-        setQrCodeUrl(data.data.qr_value);
-
-      setCurrentStep(4);
-    } catch {
-      setOtpError("Invalid or expired OTP");
-    } finally {
-      setVerifying(false);
-    }
-  };
+    setCurrentStep(4);
+  } catch (err) {
+    console.error("❌ OTP Verification Error:", err);
+    setOtpError("Invalid or expired OTP");
+  } finally {
+    setVerifying(false);
+  }
+};
 
   /* ---------------- UI ---------------- */
   if (isLoading) {
