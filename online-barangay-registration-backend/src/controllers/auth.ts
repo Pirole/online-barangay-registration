@@ -98,13 +98,9 @@ export const registerAdmin = async (req: Request, res: Response, next: NextFunct
 export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { email, password } = req.body;
-
     if (!email || !password) throw new AppError('Email and password required', 400);
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
-
+    const user = await prisma.user.findUnique({ where: { email } });
     if (!user) throw new AppError('Invalid credentials', 401);
     if (!user.isActive) throw new AppError('Account inactive', 403);
 
@@ -116,33 +112,34 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
     const accessToken = generateAccessToken(payload);
     const refreshToken = generateRefreshToken(payload);
     const hashed = hashToken(refreshToken);
+
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    // Store refresh token using token as unique identifier
     await prisma.refreshToken.upsert({
-      where: {
-        token: hashed // Using token as unique identifier
-      },
-      update: {
-        expiresAt,
-        createdAt: new Date(),
-      },
-      create: {
-        userId: user.id,
-        token: hashed,
-        expiresAt,
-      },
+      where: { token: hashed },
+      update: { expiresAt, createdAt: new Date() },
+      create: { userId: user.id, token: hashed, expiresAt },
     });
 
+    // ✅ FIX: return access token + user info (normalized shape)
     res.json({
       success: true,
-      data: { accessToken, refreshToken },
+      data: {
+        token: accessToken,
+        refreshToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+        },
+      },
     });
   } catch (error) {
     next(error);
   }
 };
+
 
 export const refreshToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
