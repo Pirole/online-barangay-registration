@@ -1,4 +1,3 @@
-// src/pages/LoginPage.tsx
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -9,16 +8,22 @@ const LoginPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  
+
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Redirect if already authenticated
+  // Automatically redirect if already logged in
   useEffect(() => {
     if (isAuthenticated) {
-      const from = location.state?.from?.pathname || '/admin';
-      navigate(from, { replace: true });
+      const storedRole = localStorage.getItem('user_role');
+      if (storedRole === 'SUPER_ADMIN' || storedRole === 'EVENT_MANAGER') {
+        navigate('/admin', { replace: true });
+      } else if (storedRole === 'STAFF') {
+        navigate('/admin', { replace: true });
+      } else {
+        navigate('/events', { replace: true });
+      }
     }
   }, [isAuthenticated, navigate, location]);
 
@@ -28,8 +33,22 @@ const LoginPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      await login(email, password);
-      // Navigation will be handled by the useEffect above
+      const success = await login(email, password);
+
+      if (success) {
+        const role = localStorage.getItem('user_role');
+
+        // ✅ Role-based redirection
+        if (role === 'SUPER_ADMIN' || role === 'EVENT_MANAGER') {
+          navigate('/admin');
+        } else if (role === 'STAFF') {
+          navigate('/admin');
+        } else {
+          navigate('/events');
+        }
+      } else {
+        setError('Invalid email or password.');
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Login failed. Please check your credentials.'
@@ -39,11 +58,7 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  const validateEmail = (email: string) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
-
+  const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const isFormValid = email && password && validateEmail(email);
 
   return (
@@ -57,9 +72,7 @@ const LoginPage: React.FC = () => {
             </svg>
           </div>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-bold text-gray-900">
-          Admin Login
-        </h2>
+        <h2 className="mt-6 text-center text-3xl font-bold text-gray-900">Admin Login</h2>
         <p className="mt-2 text-center text-sm text-gray-600">
           Para sa mga administrators at event managers lang
         </p>
@@ -69,14 +82,13 @@ const LoginPage: React.FC = () => {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow-lg sm:rounded-lg sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit}>
-            {/* Error Message */}
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-md text-sm">
                 {error}
               </div>
             )}
 
-            {/* Email Field */}
+            {/* Email */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 Email Address
@@ -96,12 +108,14 @@ const LoginPage: React.FC = () => {
                   placeholder="admin@example.com"
                 />
                 {email && !validateEmail(email) && (
-                  <p className="mt-1 text-sm text-red-600">Please enter a valid email address</p>
+                  <p className="mt-1 text-sm text-red-600">
+                    Please enter a valid email address
+                  </p>
                 )}
               </div>
             </div>
 
-            {/* Password Field */}
+            {/* Password */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Password
@@ -125,12 +139,15 @@ const LoginPage: React.FC = () => {
                 >
                   {showPassword ? (
                     <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
                     </svg>
                   ) : (
                     <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
                   )}
                 </button>
@@ -150,7 +167,6 @@ const LoginPage: React.FC = () => {
                   Remember me
                 </label>
               </div>
-
               <div className="text-sm">
                 <a href="#" className="font-medium text-blue-600 hover:text-blue-500">
                   Nakalimutan ang password?
@@ -158,7 +174,7 @@ const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Submit Button */}
+            {/* Submit */}
             <div>
               <button
                 type="submit"
@@ -185,30 +201,24 @@ const LoginPage: React.FC = () => {
           </form>
 
           {/* Demo Credentials */}
-          <div className="mt-6 border-t border-gray-200 pt-6">
-            <div className="text-sm text-gray-600">
-              <p className="font-medium mb-2">Demo Accounts:</p>
-              <div className="space-y-1 text-xs">
-                <p><strong>Super Admin:</strong> admin@barangay.com / admin123</p>
-                <p><strong>Event Manager:</strong> manager@barangay.com / manager123</p>
-                <p><strong>Staff:</strong> staff@barangay.com / staff123</p>
-              </div>
+          <div className="mt-6 border-t border-gray-200 pt-6 text-sm text-gray-600">
+            <p className="font-medium mb-2">Demo Accounts:</p>
+            <div className="space-y-1 text-xs">
+              <p><strong>Super Admin:</strong> admin@barangay.com / admin123</p>
+              <p><strong>Event Manager:</strong> manager@barangay.com / manager123</p>
+              <p><strong>Staff:</strong> staff@barangay.com / staff123</p>
             </div>
           </div>
         </div>
 
         {/* Back to Home */}
         <div className="mt-6 text-center">
-          <Link
-            to="/"
-            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-          >
+          <Link to="/" className="text-blue-600 hover:text-blue-700 text-sm font-medium">
             ← Back to Events
           </Link>
         </div>
       </div>
 
-      {/* Footer */}
       <div className="mt-8 text-center text-xs text-gray-500">
         <p>Barangay Registration System &copy; 2024</p>
       </div>
