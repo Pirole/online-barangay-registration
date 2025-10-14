@@ -5,7 +5,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: "super_admin" | "event_manager" | "staff";
+  role: "SUPER_ADMIN" | "EVENT_MANAGER" | "STAFF";
   barangay?: string;
   phone?: string;
 }
