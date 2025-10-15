@@ -4,6 +4,7 @@ import prisma from "../config/prisma";
 import { AppError } from "../middleware/errorHandler";
 import { generateOTP, hashOTP, OTP_EXPIRY_MINUTES } from "../utils/otp";
 import { logger } from "../utils/logger";
+import path from "path";
 import { sendSMS } from "../utils/sms";
 
 /**
@@ -27,6 +28,7 @@ export const createRegistrationInternal = async (opts: {
       profileId,
       photoPath,
       customValues,
+      status: "PENDING",
       // Defaults to PENDING in Prisma schema
     },
   });
@@ -93,7 +95,10 @@ export const createRegistration = async (req: Request, res: Response, next: Next
       }
     }
 
-    const photoPath = (req as any).file ? (req as any).file.path : null;
+    // Convert Windows path to relative URL path
+  const photoPath = (req as any).file
+  ? `/uploads/photos/${path.basename((req as any).file.path)}`
+  : null; 
 
     const { registration } = await createRegistrationInternal({
       eventId,
@@ -161,41 +166,99 @@ export const listRegistrations = async (req: Request, res: Response, next: NextF
 /**
  * ======================================================
  * GET /events/:eventId/registrants — Event-specific view
+ * Includes photo, contact info, age, address, QR code
  * ======================================================
  */
-export const listRegistrantsForEvent = async (req: Request, res: Response, next: NextFunction) => {
+export const listRegistrantsForEvent = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { eventId } = req.params;
-    const { status = "all", limit = 50, page = 1 } = req.query as any;
-    const skip = (Number(page) - 1) * Number(limit);
+    const page = Number(req.query.page ?? 1);
+    const limit = Number(req.query.limit ?? 50);
+    const status = (req.query.status as string)?.toUpperCase() || "ALL";
+    const offset = (page - 1) * limit;
 
-    const where: any = { eventId };
-    if (status && status.toLowerCase() !== "all") {
-      where.status = status.toUpperCase();
-    }
+    const whereClause: any = { eventId };
+    if (status !== "ALL") whereClause.status = status;
 
     const [rows, total] = await Promise.all([
       prisma.registration.findMany({
-        where,
+        where: whereClause,
         include: {
-          profile: { select: { firstName: true, lastName: true, barangay: true } },
+          profile: {
+            select: {
+              firstName: true,
+              lastName: true,
+              barangay: true,
+              contact: true,
+              age: true,
+              address: true,
+            },
+          },
+          event: { select: { title: true } },
         },
         orderBy: { createdAt: "desc" },
-        skip,
-        take: Number(limit),
+        skip: offset,
+        take: limit,
       }),
-      prisma.registration.count({ where }),
+      prisma.registration.count({ where: whereClause }),
     ]);
+
+    const result = rows.map((r) => {
+      let customVals: Record<string, any> = {};
+      if (typeof r.customValues === "string") {
+        try {
+          customVals = JSON.parse(r.customValues);
+        } catch {
+          customVals = {};
+        }
+      } else if (r.customValues && typeof r.customValues === "object" && !Array.isArray(r.customValues)) {
+        customVals = r.customValues as Record<string, any>;
+      }
+
+      return {
+        id: r.id,
+        status: r.status,
+        createdAt: r.createdAt,
+        eventId: r.eventId,
+        eventTitle: r.event?.title || null,
+        profile: r.profile
+          ? {
+              firstName: r.profile.firstName,
+              lastName: r.profile.lastName,
+              contact: r.profile.contact || customVals.contact || null,
+              age: r.profile.age || customVals.age || null,
+              address: r.profile.address || customVals.address || null,
+              barangay: r.profile.barangay || customVals.barangay || null,
+            }
+          : {
+              firstName: customVals.firstName || null,
+              lastName: customVals.lastName || null,
+              contact: customVals.contact || null,
+              age: customVals.age || null,
+              address: customVals.address || null,
+              barangay: customVals.barangay || null,
+            },
+        photoPath: r.photoPath || customVals.photo || null,
+        qrCodeUrl: customVals.qrCodeUrl || customVals.qr || null,
+        customValues: customVals,
+      };
+    });
 
     res.json({
       success: true,
-      data: rows,
-      pagination: { page: Number(page), limit: Number(limit), total },
+      data: result,
+      pagination: { page, limit, total },
     });
   } catch (error) {
     next(error);
   }
 };
+
+
 
 /**
  * GET /registrations/:id — View single registration

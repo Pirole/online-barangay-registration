@@ -56,7 +56,7 @@ export const verifyOtp = async (
     // ✅ Approve registration
     const registration = await prisma.registration.update({
       where: { id: registrationId },
-      data: { status: "APPROVED" },
+      data: { status: "PENDING" },
       include: { event: true },
     });
 

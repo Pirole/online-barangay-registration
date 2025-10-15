@@ -1,7 +1,7 @@
-// src/pages/admin/AdminDashboard.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 type Role = "SUPER_ADMIN" | "EVENT_MANAGER" | "STAFF";
 
@@ -25,7 +25,8 @@ interface RegistrantRow {
 }
 
 const AdminDashboard: React.FC = () => {
-  const { user, token } = useAuth() as any; // expects AuthContext to provide user and token
+  const { user, token, logout } = useAuth() as any;
+  const navigate = useNavigate();
   const role = (user?.role || "").toUpperCase() as Role | string;
 
   const [events, setEvents] = useState<ShortEvent[]>([]);
@@ -40,8 +41,13 @@ const AdminDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // 🔄 Load Events
   useEffect(() => {
     const load = async (): Promise<void> => {
+      if (!token) {
+        setError("No authentication token found.");
+        return;
+      }
       try {
         setLoadingEvents(true);
         setError(null);
@@ -77,48 +83,55 @@ const AdminDashboard: React.FC = () => {
     load();
   }, [role, token, user?.id, refreshKey]);
 
+  // 🔄 Load Registrants (Pending)
   useEffect(() => {
     const loadRegs = async (): Promise<void> => {
+      if (!token) return;
       try {
         setLoadingRegs(true);
         setError(null);
 
-        const resp = await apiFetch(
-          "/registrations?status=pending&limit=50",
-          {},
-          token
-        ).catch(async () => {
-          // fallback: try per-event fetch if global route unavailable
-          if (events.length === 0) return { data: [] };
-          const arr: any[] = [];
-          for (const e of events) {
-            try {
-              const r = await apiFetch(
-                `/events/${e.id}/registrants?status=pending`,
-                {},
-                token
-              );
-              (r.data || []).forEach((reg: any) =>
-                arr.push({ ...reg, eventTitle: e.title, eventId: e.id })
-              );
-            } catch {
-              /* ignore */
-            }
-          }
-          return { data: arr };
-        });
+        const arr: any[] = [];
 
-        const regs: RegistrantRow[] = (resp?.data || []).map((r: any) => ({
+        // Fetch registrants for each event (since /registrations?status=pending may not exist globally)
+        for (const e of events) {
+          try {
+            const r = await apiFetch(
+              `/events/${e.id}/registrants?status=pending`,
+              {},
+              token
+            );
+            (r.data || []).forEach((reg: any) =>
+              arr.push({ ...reg, eventTitle: e.title, eventId: e.id })
+            );
+          } catch (err) {
+            console.warn(`Failed to fetch registrants for event ${e.title}`);
+          }
+        }
+
+        const regs: RegistrantRow[] = (arr || []).map((r: any) => ({
           id: r.id,
-          eventId: r.eventId ?? r.event_id,
-          eventTitle: r.eventTitle ?? (r.event?.title || ""),
+          eventId: r.eventId,
+          eventTitle: r.eventTitle,
           profile: r.profile ?? {
-            firstName: r.firstName,
-            lastName: r.lastName,
-            barangay: r.barangay,
+            firstName:
+              (r.customValues &&
+                typeof r.customValues === "object" &&
+                (r.customValues as any).firstName) ||
+              "",
+            lastName:
+              (r.customValues &&
+                typeof r.customValues === "object" &&
+                (r.customValues as any).lastName) ||
+              "",
+            barangay:
+              (r.customValues &&
+                typeof r.customValues === "object" &&
+                (r.customValues as any).barangay) ||
+              "",
           },
-          customValues: r.customValues ?? r.custom_field_values,
-          status: (r.status || r.state || "pending").toLowerCase(),
+          customValues: r.customValues ?? {},
+          status: (r.status || "pending").toLowerCase(),
           created_at: r.createdAt || r.created_at,
         }));
 
@@ -147,7 +160,10 @@ const AdminDashboard: React.FC = () => {
   const approveRegistrant = async (id: string): Promise<void> => {
     if (!confirm("Approve this registrant?")) return;
     try {
-      await apiFetch(`/registrants/${id}/approve`, { method: "POST" }, token);
+      await apiFetch(`/registrations/${id}/approval`, {
+        method: "POST",
+        body: JSON.stringify({ status: "approved" }),
+      }, token);
       refresh();
     } catch (error: any) {
       alert(error.message || "Approve failed");
@@ -155,20 +171,26 @@ const AdminDashboard: React.FC = () => {
   };
 
   const rejectRegistrant = async (id: string): Promise<void> => {
-    const reason = prompt("Reason for rejection (optional):") || "";
+    if (!confirm("Reject this registrant?")) return;
     try {
-      await apiFetch(
-        `/registrants/${id}/reject`,
-        {
-          method: "POST",
-          body: JSON.stringify({ reason }),
-        },
-        token
-      );
+      await apiFetch(`/registrations/${id}/approval`, {
+        method: "POST",
+        body: JSON.stringify({ status: "rejected" }),
+      }, token);
       refresh();
     } catch (error: any) {
       alert(error.message || "Reject failed");
     }
+  };
+
+  const handleLogout = (): void => {
+    if (logout) {
+      logout();
+    } else {
+      localStorage.clear();
+      sessionStorage.clear();
+    }
+    navigate("/login");
   };
 
   const pending = useMemo(
@@ -179,16 +201,24 @@ const AdminDashboard: React.FC = () => {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
-        <div className="flex items-center space-x-3">
-          <span className="text-sm text-gray-600">
-            Role: <strong>{role || "unknown"}</strong>
-          </span>
+        <div>
+          <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
+          <p className="text-sm text-gray-600">
+            Logged in as: <strong>{user?.email || "Unknown"}</strong> ({role})
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
           <button
             onClick={refresh}
             className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
           >
             Refresh
+          </button>
+          <button
+            onClick={handleLogout}
+            className="px-3 py-1 rounded bg-gray-600 text-white hover:bg-gray-700"
+          >
+            Logout
           </button>
         </div>
       </div>
@@ -212,62 +242,61 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Events table */}
-<section className="mb-6 bg-white p-4 rounded shadow">
-  <div className="flex items-center justify-between mb-3">
-    <h2 className="text-lg font-medium">Events</h2>
-    <div className="text-sm text-gray-500">
-      {loadingEvents ? "Loading..." : `${events.length} events`}
-    </div>
-  </div>
+      <section className="mb-6 bg-white p-4 rounded shadow">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-medium">Events</h2>
+          <div className="text-sm text-gray-500">
+            {loadingEvents ? "Loading..." : `${events.length} events`}
+          </div>
+        </div>
 
-  <div className="overflow-x-auto">
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-left text-gray-600">
-          <th className="py-2">Title</th>
-          <th>Location</th>
-          <th>Start</th>
-          <th>Registrants</th>
-          <th className="text-right">Actions</th> {/* ✅ new */}
-        </tr>
-      </thead>
-      <tbody>
-        {events.map((evt) => (
-          <tr key={evt.id} className="border-t">
-            <td className="py-2">{evt.title}</td>
-            <td>{evt.location}</td>
-            <td>
-              {evt.start_date
-                ? new Date(evt.start_date).toLocaleString()
-                : "-"}
-            </td>
-            <td>{evt.registration_count ?? 0}</td>
-            <td className="text-right">
-              <div className="inline-flex gap-2">
-                <button
-                  onClick={() =>
-                    window.location.href = `/admin/events/${evt.id}/registrants`
-                  }
-                  className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
-                >
-                  View Registrants
-                </button>
-              </div>
-            </td>
-          </tr>
-        ))}
-        {events.length === 0 && !loadingEvents && (
-          <tr>
-            <td colSpan={5} className="p-4 text-gray-500">
-              No events found.
-            </td>
-          </tr>
-        )}
-      </tbody>
-    </table>
-  </div>
-</section>
-
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-gray-600">
+                <th className="py-2">Title</th>
+                <th>Location</th>
+                <th>Start</th>
+                <th>Registrants</th>
+                <th className="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.map((evt) => (
+                <tr key={evt.id} className="border-t">
+                  <td className="py-2">{evt.title}</td>
+                  <td>{evt.location}</td>
+                  <td>
+                    {evt.start_date
+                      ? new Date(evt.start_date).toLocaleString()
+                      : "-"}
+                  </td>
+                  <td>{evt.registration_count ?? 0}</td>
+                  <td className="text-right">
+                    <div className="inline-flex gap-2">
+                      <button
+                        onClick={() =>
+                          navigate(`/admin/events/${evt.id}/registrants`)
+                        }
+                        className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                      >
+                        View Registrants
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {events.length === 0 && !loadingEvents && (
+                <tr>
+                  <td colSpan={5} className="p-4 text-gray-500">
+                    No events found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       {/* Pending registrants table */}
       <section className="bg-white p-4 rounded shadow">

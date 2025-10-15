@@ -1,7 +1,6 @@
-// src/routes/events.ts
 import { Router } from 'express';
 import * as eventsController from '../controllers/events';
-import * as registrationsController from '../controllers/registrations'; // ✅ add this
+import * as registrationsController from '../controllers/registrations';
 import { CreateEventSchema, UpdateEventSchema, QueryEventsSchema, validateRequest } from '../utils/validation';
 import { authenticateToken, authorize, optionalAuth } from '../middleware/auth';
 
@@ -13,14 +12,15 @@ router.get('/', validateRequest(QueryEventsSchema), optionalAuth, eventsControll
 // Public: single event
 router.get('/:id', optionalAuth, eventsController.getEvent);
 
-// ✅ FIX: Add this route so dashboard can load registrants per event
+// ✅ New: list registrants for a specific event (admin/event_manager only)
 router.get(
   '/:eventId/registrants',
   authenticateToken,
+  authorize('SUPER_ADMIN', 'EVENT_MANAGER', 'STAFF'),
   registrationsController.listRegistrantsForEvent
 );
 
-// Protected: create event
+// Protected: create event (super_admin or event_manager)
 router.post('/', authenticateToken, authorize('SUPER_ADMIN', 'EVENT_MANAGER'), validateRequest(CreateEventSchema), eventsController.createEvent);
 
 // Protected: update event

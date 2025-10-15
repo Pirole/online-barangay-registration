@@ -1,119 +1,159 @@
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import compression from 'compression';
-import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
-import { createServer } from 'http';
-import fs from 'fs';
-import path from 'path';
-import routes from './routes';
+/**
+ * ======================================================
+ * server.ts — Entry point for the Barangay Registration API
+ * ======================================================
+ */
+import express from "express";
+import cors from "cors";
+import helmet from "helmet";
+import compression from "compression";
+import rateLimit from "express-rate-limit";
+import dotenv from "dotenv";
+import { createServer } from "http";
+import path from "path";
+import routes from "./routes";
 import registrationRoutes from "./routes/registrations";
+import { logger } from "./utils/logger";
+import { connectDatabase } from "./config/database";
+import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+import { requestLogger } from "./middleware/requestLogger";
 
-import { logger } from './utils/logger';
-import { connectDatabase } from './config/database';
-import { errorHandler, notFoundHandler } from './middleware/errorHandler';
-import { requestLogger } from './middleware/requestLogger';
-
-// Load environment variables
+// ================================================
+// LOAD ENVIRONMENT VARIABLES
+// ================================================
 dotenv.config();
-
-const isDev = process.env.NODE_ENV !== 'production';
-
+const isDev = process.env.NODE_ENV !== "production";
 const app = express();
 const PORT = process.env.PORT || 5000;
-const API_VERSION = process.env.API_VERSION || 'v1';
+const API_VERSION = process.env.API_VERSION || "v1";
 
 // ================================================
-// MIDDLEWARE SETUP
+// SECURITY & MIDDLEWARE
 // ================================================
-helmet({
+app.use(
+  helmet({
     crossOriginEmbedderPolicy: false,
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'"],
-        imgSrc: ["'self'", "data:", "https:", "http://localhost:5000"], // ✅ add this line
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:", "http://localhost:5000"],
       },
     },
   })
+);
 
-app.use(cors({
-  origin: "http://localhost:5173",  // or "*" for all origins (not recommended in production)
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
+app.use(
+  cors({
+    origin: ["http://localhost:5173", "http://localhost:3000"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
-const rateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per window
-  message: { error: 'Too many requests from this IP, please try again later.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// ✅ Apply limiter only in production
-if (process.env.NODE_ENV === 'production') {
+if (!isDev) {
+  const rateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: { error: "Too many requests from this IP, please try again later." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
   app.use(rateLimiter);
 } else {
-  logger.info('🧪 Rate limiter disabled in dev');
+  logger.info("🧪 Rate limiter disabled in development mode");
 }
 
 app.use(compression());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(requestLogger);
-app.use(
-  "/uploads",
-  cors({
-    origin: ["http://localhost:5173", "http://localhost:3000"], // 👈 match your frontend URL
-    methods: ["GET"],
-    allowedHeaders: ["Content-Type"],
-  }),
-  express.static("uploads")
-);
 
 // ================================================
-// HEALTH CHECK
+// STATIC FILES — Serve uploads for Photos & QR Codes
 // ================================================
-app.get('/health', (req, res) => {
+
+/**
+ * ✅ Serve registrant photos (stored in src/uploads/photos)
+ * Example URL: http://localhost:5000/uploads/photos/photo-123.jpg
+ */
+app.use(
+  "/uploads/photos",
+  express.static(path.join(__dirname, "uploads", "photos"), {
+    setHeaders: (res) => {
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    },
+  })
+);
+
+/**
+ * ✅ Serve QR codes (stored in uploads/qr outside src)
+ * Example URL: http://localhost:5000/uploads/qr/qr-123.png
+ */
+app.use(
+  "/uploads/qr",
+  express.static(path.join(__dirname, "..", "uploads", "qr"), {
+    setHeaders: (res) => {
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    },
+  })
+);
+// ================================================
+// HEALTH CHECK ROUTES
+// ================================================
+app.get("/health", (req, res) => {
   res.status(200).json({
-    status: 'OK',
+    status: "OK",
+    environment: process.env.NODE_ENV,
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    environment: process.env.NODE_ENV,
-    version: process.env.npm_package_version || '1.0.0',
   });
 });
 
-app.get('/health/db', async (req, res) => {
+app.get("/health/db", async (req, res) => {
   try {
     const db = await connectDatabase();
-    await db.query('SELECT 1 as health_check');
-    res.status(200).json({ status: 'OK', database: 'Connected' });
+    await db.query("SELECT 1 as health_check");
+    res.status(200).json({ status: "OK", database: "Connected" });
   } catch (error) {
-    logger.error('Database health check failed:', error);
-    res.status(503).json({ status: 'ERROR', database: 'Disconnected' });
+    logger.error("Database health check failed:", error);
+    res.status(503).json({ status: "ERROR", database: "Disconnected" });
   }
 });
 
 // ================================================
-// AUTOLOAD ROUTES
+// MAIN API ROUTES
 // ================================================
-
-
 app.use(`/api/${API_VERSION}`, routes);
 app.use(`/api/${API_VERSION}/registrations`, registrationRoutes);
 
-// Root endpoint
-app.get('/', (req, res) => {
+// API Index route
+app.get(`/api/${API_VERSION}`, (req, res) => {
   res.json({
-    name: 'Barangay Registration System API',
-    version: '1.0.0',
-    description: 'Online Barangay Registration System - PWA Backend',
+    message: `Welcome to Barangay Registration System API v${API_VERSION}`,
+    endpoints: [
+      "/auth",
+      "/events",
+      "/registrations",
+      "/users",
+      "/otp",
+      "/teams",
+      "/upload",
+      "/customFields",
+      "/admin",
+      "/qr",
+    ],
+  });
+});
+
+// Root endpoint
+app.get("/", (req, res) => {
+  res.json({
+    name: "Barangay Registration System API",
+    version: "1.0.0",
     apiVersion: API_VERSION,
-    endpoints: { health: '/health', api: `/api/${API_VERSION}` },
+    description: "Online Barangay Registration System - PWA Backend",
     timestamp: new Date().toISOString(),
   });
 });
@@ -130,7 +170,7 @@ app.use(errorHandler);
 async function startServer() {
   try {
     await connectDatabase();
-    logger.info('Database connection established successfully');
+    logger.info("✅ Database connection established successfully");
 
     const server = createServer(app);
     server.listen(PORT, () => {
@@ -139,38 +179,19 @@ async function startServer() {
       logger.info(`🏥 Health: http://localhost:${PORT}/health`);
     });
 
-    process.on('SIGTERM', () => {
-      logger.info('SIGTERM received, shutting down gracefully');
+    process.on("SIGTERM", () => {
+      logger.info("SIGTERM received, shutting down gracefully...");
       server.close(() => process.exit(0));
     });
-    process.on('SIGINT', () => {
-      logger.info('SIGINT received, shutting down gracefully');
+
+    process.on("SIGINT", () => {
+      logger.info("SIGINT received, shutting down gracefully...");
       server.close(() => process.exit(0));
     });
   } catch (error) {
-    logger.error('Failed to start server:', error);
+    logger.error("❌ Failed to start server:", error);
     process.exit(1);
   }
 }
-
-
-// Add an index response for `/api/v1`
-app.get(`/api/${API_VERSION}`, (req, res) => {
-  res.json({
-    message: `Welcome to API v${API_VERSION}`,
-    availableRoutes: [
-      '/auth',
-      '/events',
-      '/registrations',
-      '/users',
-      '/otp',
-      '/teams',
-      '/upload',
-      '/customFields',
-      '/admin',
-      '/qr'
-    ]
-  });
-});
 
 startServer();

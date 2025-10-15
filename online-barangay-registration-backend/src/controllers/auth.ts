@@ -2,6 +2,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt, { SignOptions, Secret } from 'jsonwebtoken';
 import crypto from 'crypto';
+import path from 'path';
 import prisma from '../config/prisma';
 import { logger } from '../utils/logger';
 import { AppError } from '../middleware/errorHandler';
@@ -50,7 +51,9 @@ export const register = async (req: Request, res: Response, next: NextFunction):
       ...(customValues || {}),
     };
 
-    const photoPath = photoTempId ? `/uploads/${photoTempId}` : (req as any).file ? (req as any).file.path : null;
+    const photoPath = (req as any).file
+      ? `/uploads/photos/${path.basename((req as any).file.path)}`
+      : null; 
 
     const { registration } = await createRegistrationInternal({
       eventId,
