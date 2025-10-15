@@ -17,6 +17,7 @@ import { logger } from "./utils/logger";
 import { connectDatabase } from "./config/database";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { requestLogger } from "./middleware/requestLogger";
+import eventManagerRoutes from "./routes/eventManagerRoutes";
 
 // ================================================
 // LOAD ENVIRONMENT VARIABLES
@@ -121,7 +122,7 @@ app.get("/health/db", async (req, res) => {
     res.status(503).json({ status: "ERROR", database: "Disconnected" });
   }
 });
-
+app.use("/api/v1/event-managers", eventManagerRoutes);
 // ================================================
 // MAIN API ROUTES
 // ================================================
