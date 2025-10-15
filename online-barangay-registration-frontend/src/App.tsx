@@ -14,8 +14,9 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import EventManagement from './pages/admin/EventManagement';
 import UserManagement from './pages/admin/UserManagement';
 import AuditLogs from './pages/admin/AuditLogs';
+import EventRegistrants from './pages/admin/EventRegistrants';
 
-  
+
 // Components
 import AuthGuard from './components/layout/AuthGuard';
 
@@ -32,7 +33,7 @@ function App() {
               {/*<Route path="/events/:id" element={<EventDetailsPage />} /> */}
               <Route path="/register/:eventId" element={<RegistrationPage />} />
               <Route path="/login" element={<LoginPage />} />
-              
+              <Route path="/admin/events/:id/registrants" element={<EventRegistrants />} />
               {/* Protected Admin Routes */}
               <Route path="/admin" element={
                 <AuthGuard roles={['SUPER_ADMIN','EVENT_MANAGER','STAFF']}>
