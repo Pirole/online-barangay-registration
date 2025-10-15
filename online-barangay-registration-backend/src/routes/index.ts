@@ -10,6 +10,7 @@ import upload from './upload';
 import customFields from './customFields';
 import teams from './teams';
 import categories from './categories';
+import eventManagers from "./eventManagerRoutes";
 
 const router = Router();
 
@@ -23,6 +24,6 @@ router.use('/upload', upload);
 router.use('/custom-fields', customFields);
 router.use('/teams', teams);
 router.use('/categories', categories);
-
+router.use("/event-managers", eventManagers);
 
 export default router;
