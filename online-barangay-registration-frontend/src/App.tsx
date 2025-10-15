@@ -15,7 +15,7 @@ import EventManagement from './pages/admin/EventManagement';
 import UserManagement from './pages/admin/UserManagement';
 import AuditLogs from './pages/admin/AuditLogs';
 import EventRegistrants from './pages/admin/EventRegistrants';
-
+import EventManagers from './pages/admin/EventManagers';
 
 // Components
 import AuthGuard from './components/layout/AuthGuard';
@@ -55,6 +55,8 @@ function App() {
                   <AuditLogs />
                 </AuthGuard>
               } />
+              <Route path="/admin/event-managers" element={<EventManagers />} />
+
             </Routes>
           </div>
         </Router>
