@@ -1,3 +1,4 @@
+// src/pages/admin/EventManagement.tsx
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { apiFetch } from "../../lib/api";
@@ -7,11 +8,28 @@ interface EventData {
   title: string;
   description?: string;
   location?: string;
-  startDate?: string;
-  endDate?: string;
-  customFields?: Record<string, any>[];
+  start_date?: string;
+  end_date?: string;
+  capacity?: number;
+  age_min?: number;
+  age_max?: number;
+  registrant_count?: number;
 }
 
+interface Registrant {
+  id: string;
+  profile?: {
+    firstName: string;
+    lastName: string;
+    barangay?: string;
+  };
+  status: string;
+  createdAt: string;
+}
+
+// ====================
+// EVENT CREATE/EDIT MODAL
+// ====================
 interface ModalProps {
   open: boolean;
   onClose: () => void;
@@ -24,37 +42,21 @@ const EventModal: React.FC<ModalProps> = ({ open, onClose, event, onSave }) => {
     title: "",
     description: "",
     location: "",
-    startDate: "",
-    endDate: "",
-    customFields: [],
+    start_date: "",
+    end_date: "",
   });
-
-  const [customFieldInput, setCustomFieldInput] = useState(
-    JSON.stringify(event?.customFields || [], null, 2)
-  );
 
   useEffect(() => {
     if (event) {
-      setFormData({
-        id: event.id,
-        title: event.title,
-        description: event.description || "",
-        location: event.location || "",
-        startDate: event.startDate || "",
-        endDate: event.endDate || "",
-        customFields: event.customFields || [],
-      });
-      setCustomFieldInput(JSON.stringify(event.customFields || [], null, 2));
+      setFormData(event);
     } else {
       setFormData({
         title: "",
         description: "",
         location: "",
-        startDate: "",
-        endDate: "",
-        customFields: [],
+        start_date: "",
+        end_date: "",
       });
-      setCustomFieldInput("[]");
     }
   }, [event]);
 
@@ -65,12 +67,7 @@ const EventModal: React.FC<ModalProps> = ({ open, onClose, event, onSave }) => {
   };
 
   const handleSave = () => {
-    try {
-      const parsedFields = JSON.parse(customFieldInput || "[]");
-      onSave({ ...formData, customFields: parsedFields });
-    } catch {
-      alert("Invalid JSON format in custom fields");
-    }
+    onSave(formData);
   };
 
   if (!open) return null;
@@ -107,26 +104,19 @@ const EventModal: React.FC<ModalProps> = ({ open, onClose, event, onSave }) => {
           <div className="grid grid-cols-2 gap-3">
             <input
               type="datetime-local"
-              name="startDate"
-              value={formData.startDate}
+              name="start_date"
+              value={formData.start_date || ""}
               onChange={handleChange}
               className="border w-full rounded p-2"
             />
             <input
               type="datetime-local"
-              name="endDate"
-              value={formData.endDate}
+              name="end_date"
+              value={formData.end_date || ""}
               onChange={handleChange}
               className="border w-full rounded p-2"
             />
           </div>
-
-          <label className="text-sm font-medium">Custom Fields (JSON)</label>
-          <textarea
-            value={customFieldInput}
-            onChange={(e) => setCustomFieldInput(e.target.value)}
-            className="border rounded p-2 font-mono text-sm w-full h-40"
-          />
 
           <div className="flex justify-end gap-2 mt-4">
             <button
@@ -148,6 +138,101 @@ const EventModal: React.FC<ModalProps> = ({ open, onClose, event, onSave }) => {
   );
 };
 
+// ====================
+// REGISTRANTS MODAL
+// ====================
+interface RegistrantModalProps {
+  open: boolean;
+  onClose: () => void;
+  eventId: string | null;
+  token: string;
+}
+
+const RegistrantModal: React.FC<RegistrantModalProps> = ({
+  open,
+  onClose,
+  eventId,
+  token,
+}) => {
+  const [registrants, setRegistrants] = useState<Registrant[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!eventId || !open) return;
+    const loadRegistrants = async () => {
+      setLoading(true);
+      try {
+        const res = await apiFetch(
+          `/registrations/event/${eventId}?status=all`,
+          {},
+          token
+        );
+        setRegistrants(res.data || []);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadRegistrants();
+  }, [eventId, open]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg w-full max-w-3xl shadow-lg p-6">
+        <h2 className="text-xl font-semibold mb-4">Event Registrants</h2>
+
+        {loading ? (
+          <div className="text-gray-500">Loading...</div>
+        ) : registrants.length === 0 ? (
+          <div className="text-gray-500">No registrants found.</div>
+        ) : (
+          <table className="w-full text-sm border">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="p-2 text-left">Name</th>
+                <th className="p-2 text-left">Barangay</th>
+                <th className="p-2 text-left">Status</th>
+                <th className="p-2 text-left">Date Registered</th>
+              </tr>
+            </thead>
+            <tbody>
+              {registrants.map((r) => (
+                <tr key={r.id} className="border-t">
+                  <td className="p-2">
+                    {r.profile
+                      ? `${r.profile.firstName} ${r.profile.lastName}`
+                      : "—"}
+                  </td>
+                  <td className="p-2">{r.profile?.barangay || "—"}</td>
+                  <td className="p-2">{r.status}</td>
+                  <td className="p-2">
+                    {new Date(r.createdAt).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        <div className="flex justify-end mt-4">
+          <button
+            onClick={onClose}
+            className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ====================
+// MAIN PAGE
+// ====================
 const EventManagement: React.FC = () => {
   const { user, token } = useAuth() as any;
   const role = (user?.role || "").toUpperCase();
@@ -157,7 +242,9 @@ const EventManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [registrantModalOpen, setRegistrantModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<EventData | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   const loadEvents = async (): Promise<void> => {
     setLoading(true);
@@ -184,7 +271,7 @@ const EventManagement: React.FC = () => {
   const handleSave = async (data: EventData): Promise<void> => {
     try {
       const method = data.id ? "PUT" : "POST";
-      const url = data.id ? `/admin/events/${data.id}` : `/admin/events`;
+      const url = data.id ? `/events/${data.id}` : `/events`;
       await apiFetch(
         url,
         {
@@ -204,7 +291,7 @@ const EventManagement: React.FC = () => {
   const handleDelete = async (id: string): Promise<void> => {
     if (!confirm("Are you sure you want to delete this event?")) return;
     try {
-      await apiFetch(`/admin/events/${id}`, { method: "DELETE" }, token);
+      await apiFetch(`/events/${id}`, { method: "DELETE" }, token);
       loadEvents();
     } catch (error: any) {
       alert(error.message || "Delete failed");
@@ -238,7 +325,7 @@ const EventManagement: React.FC = () => {
               <th>Location</th>
               <th>Start</th>
               <th>End</th>
-              <th>Custom Fields</th>
+              <th>Registrants</th>
               {canEdit && <th className="text-right">Actions</th>}
             </tr>
           </thead>
@@ -248,17 +335,23 @@ const EventManagement: React.FC = () => {
                 <td className="py-2">{evt.title}</td>
                 <td>{evt.location || "-"}</td>
                 <td>
-                  {evt.startDate
-                    ? new Date(evt.startDate).toLocaleString()
+                  {evt.start_date
+                    ? new Date(evt.start_date).toLocaleString()
                     : "-"}
                 </td>
                 <td>
-                  {evt.endDate ? new Date(evt.endDate).toLocaleString() : "-"}
+                  {evt.end_date ? new Date(evt.end_date).toLocaleString() : "-"}
                 </td>
                 <td>
-                  <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">
-                    {evt.customFields?.length || 0} fields
-                  </code>
+                  <button
+                    onClick={() => {
+                      setSelectedEventId(evt.id!);
+                      setRegistrantModalOpen(true);
+                    }}
+                    className="text-blue-600 hover:underline"
+                  >
+                    {evt.registrant_count || 0} view
+                  </button>
                 </td>
                 {canEdit && (
                   <td className="text-right">
@@ -304,6 +397,13 @@ const EventManagement: React.FC = () => {
         onClose={() => setModalOpen(false)}
         event={editingEvent}
         onSave={handleSave}
+      />
+
+      <RegistrantModal
+        open={registrantModalOpen}
+        onClose={() => setRegistrantModalOpen(false)}
+        eventId={selectedEventId}
+        token={token}
       />
     </div>
   );
