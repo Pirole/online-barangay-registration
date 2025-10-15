@@ -8,6 +8,7 @@ import { createServer } from 'http';
 import fs from 'fs';
 import path from 'path';
 import routes from './routes';
+import registrationRoutes from "./routes/registrations";
 
 import { logger } from './utils/logger';
 import { connectDatabase } from './config/database';
@@ -103,6 +104,7 @@ app.get('/health/db', async (req, res) => {
 
 
 app.use(`/api/${API_VERSION}`, routes);
+app.use(`/api/${API_VERSION}/registrations`, registrationRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {

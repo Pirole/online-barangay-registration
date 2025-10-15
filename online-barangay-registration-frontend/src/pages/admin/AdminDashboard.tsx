@@ -212,48 +212,62 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Events table */}
-      <section className="mb-6 bg-white p-4 rounded shadow">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-medium">Events</h2>
-          <div className="text-sm text-gray-500">
-            {loadingEvents ? "Loading..." : `${events.length} events`}
-          </div>
-        </div>
+<section className="mb-6 bg-white p-4 rounded shadow">
+  <div className="flex items-center justify-between mb-3">
+    <h2 className="text-lg font-medium">Events</h2>
+    <div className="text-sm text-gray-500">
+      {loadingEvents ? "Loading..." : `${events.length} events`}
+    </div>
+  </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-600">
-                <th className="py-2">Title</th>
-                <th>Location</th>
-                <th>Start</th>
-                <th>Registrants</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((evt) => (
-                <tr key={evt.id} className="border-t">
-                  <td className="py-2">{evt.title}</td>
-                  <td>{evt.location}</td>
-                  <td>
-                    {evt.start_date
-                      ? new Date(evt.start_date).toLocaleString()
-                      : "-"}
-                  </td>
-                  <td>{evt.registration_count ?? 0}</td>
-                </tr>
-              ))}
-              {events.length === 0 && !loadingEvents && (
-                <tr>
-                  <td colSpan={4} className="p-4 text-gray-500">
-                    No events found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+  <div className="overflow-x-auto">
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="text-left text-gray-600">
+          <th className="py-2">Title</th>
+          <th>Location</th>
+          <th>Start</th>
+          <th>Registrants</th>
+          <th className="text-right">Actions</th> {/* ✅ new */}
+        </tr>
+      </thead>
+      <tbody>
+        {events.map((evt) => (
+          <tr key={evt.id} className="border-t">
+            <td className="py-2">{evt.title}</td>
+            <td>{evt.location}</td>
+            <td>
+              {evt.start_date
+                ? new Date(evt.start_date).toLocaleString()
+                : "-"}
+            </td>
+            <td>{evt.registration_count ?? 0}</td>
+            <td className="text-right">
+              <div className="inline-flex gap-2">
+                <button
+                  onClick={() =>
+                    window.location.href = `/admin/events/${evt.id}/registrants`
+                  }
+                  className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  View Registrants
+                </button>
+              </div>
+            </td>
+          </tr>
+        ))}
+        {events.length === 0 && !loadingEvents && (
+          <tr>
+            <td colSpan={5} className="p-4 text-gray-500">
+              No events found.
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  </div>
+</section>
+
 
       {/* Pending registrants table */}
       <section className="bg-white p-4 rounded shadow">
