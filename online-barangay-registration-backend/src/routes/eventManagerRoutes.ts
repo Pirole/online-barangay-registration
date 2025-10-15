@@ -16,16 +16,13 @@ const requireSuperAdmin = (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): void => {
   const user = (req as any).user;
-
   if (!user || user.role !== "SUPER_ADMIN") {
-    return res
-      .status(403)
-      .json({ success: false, message: "Access denied. SUPER_ADMIN only." });
+    res.status(403).json({ message: "Forbidden" });
+    return; // ✅ explicitly return here
   }
-
-  next();
+  next(); // ✅ ensures continuation when authorized
 };
 
 // ✅ Get all Event Managers

@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import prisma from "../config/prisma";
 import { AppError } from "../middleware/errorHandler";
 import bcrypt from "bcryptjs";
-
+import { logger } from "../utils/logger";
 /**
  * Get all Event Managers
  */
@@ -42,29 +42,37 @@ export const createEventManager = async (
   try {
     const { email, password, firstName, lastName } = req.body;
 
-    if (!email || !password)
+    if (!email || !password) {
       throw new AppError("Email and password are required", 400);
+    }
 
-    // Check if email exists
     const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) throw new AppError("Email already registered", 400);
+    if (existing) throw new AppError("Email already exists", 400);
 
-    const hashed = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Build data object safely (ignore fields that don’t exist in your schema)
-    const data: any = {
-      email,
-      password: hashed,
-      role: "EVENT_MANAGER",
-    };
+    const newManager = await prisma.user.create({
+      data: {
+        email,
+        passwordHash: hashedPassword, // ✅ FIXED HERE
+        role: "EVENT_MANAGER",
+        // optional fields
+        ...(firstName ? { firstName } : {}),
+        ...(lastName ? { lastName } : {}),
+      },
+    });
 
-    // Add optional fields only if they exist in schema
-    if ("firstName" in prisma.user.fields) data.firstName = firstName || null;
-    if ("lastName" in prisma.user.fields) data.lastName = lastName || null;
+    logger.info(`✅ Created Event Manager: ${newManager.email}`);
 
-    const newManager = await prisma.user.create({ data });
-
-    res.status(201).json({ success: true, data: newManager });
+    res.status(201).json({
+      success: true,
+      data: {
+        id: newManager.id,
+        email: newManager.email,
+        role: newManager.role,
+      },
+      message: "Event Manager created successfully",
+    });
   } catch (error) {
     next(error);
   }
