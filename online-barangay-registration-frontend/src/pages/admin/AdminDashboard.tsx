@@ -234,6 +234,12 @@ const AdminDashboard: React.FC = () => {
           >
             Logout
           </button>
+          <button
+            onClick={() => navigate("/admin/event-managers")}
+            className="px-3 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-700"
+          >
+            Manage Event Managers
+          </button>
         </div>
       </div>
 
