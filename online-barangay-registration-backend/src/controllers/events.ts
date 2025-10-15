@@ -145,7 +145,11 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
 /**
  * PUT /events/:id
  */
-export const updateEvent = async (req: Request, res: Response, next: NextFunction) => {
+export const updateEvent = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
     const id = req.params.id;
     const allowed: string[] = [
@@ -173,7 +177,8 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
     }
 
     if (sets.length === 0) {
-      return res.json({ success: true, message: "No changes" });
+      res.json({ success: true, message: "No changes" });
+      return;
     }
 
     vals.push(id);
@@ -184,10 +189,13 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
     );
 
     res.json({ success: true, message: "Event updated" });
+    return;
   } catch (error) {
     next(error);
+    return;
   }
 };
+
 
 /**
  * DELETE /events/:id

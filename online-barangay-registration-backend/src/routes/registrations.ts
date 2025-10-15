@@ -1,34 +1,37 @@
-import { Router } from 'express';
-import { validateRequest } from '../utils/validation';
-import * as registrationsController from '../controllers/registrations';
-import { RegisterSchema, QueryRegistrantsSchema, ApprovalSchema } from '../utils/validation';
-import { authenticateToken, authorize, optionalAuth } from '../middleware/auth';
-import { upload } from '../middleware/upload';
+// src/routes/registrations.ts
+import { Router } from "express";
+import * as registrationsController from "../controllers/registrations";
+import { authenticateToken, authorize } from "../middleware/auth";
+import { upload } from "../middleware/upload";
 
 const router = Router();
 
-// Create registration (public or authenticated). Accept photo upload or temp photo id.
-// If using file upload: field name 'photo'
+// Create registration (public)
+router.post("/", upload.single("photo"), registrationsController.createRegistration);
+
+// Admin view all registrations (with optional ?status=pending)
+router.get("/", authenticateToken, authorize("SUPER_ADMIN", "EVENT_MANAGER"), registrationsController.listRegistrations);
+
+// View registrants for specific event
+router.get("/event/:eventId", authenticateToken, registrationsController.listRegistrantsForEvent);
+
+// View specific registration
+router.get("/:id", authenticateToken, registrationsController.getRegistration);
+
+// Approve / Reject registration
 router.post(
-  '/',
-  upload.single('photo'),
-  //validateRequest(RegisterSchema),
-  registrationsController.createRegistration
+  "/:id/approval",
+  authenticateToken,
+  authorize("SUPER_ADMIN", "EVENT_MANAGER"),
+  registrationsController.approveOrRejectRegistration
 );
 
-// Send registration (if multi-step with photo stored earlier)
-router.post('/submit', validateRequest(RegisterSchema), registrationsController.submitRegistration);
-
-// Get registrants for an event (protected: event manager & admin & staff read policies)
-router.get('/event/:eventId', authenticateToken, validateRequest(QueryRegistrantsSchema), registrationsController.listRegistrantsForEvent);
-
-// Get single registration (protected)
-router.get('/:id', authenticateToken, registrationsController.getRegistration);
-
-// Approve/reject registration (event manager or super admin)
-router.post('/:id/approval', authenticateToken, authorize('SUPER_ADMIN', 'EVENT_MANAGER'), validateRequest(ApprovalSchema), registrationsController.approveOrRejectRegistration);
-
-// Check-in (QR check-in) — internal; QR scanning logic will call this endpoint
-router.post('/:id/checkin', authenticateToken, authorize('SUPER_ADMIN', 'EVENT_MANAGER', 'STAFF'), registrationsController.markCheckin);
+// Check-in (QR-based)
+router.post(
+  "/:id/checkin",
+  authenticateToken,
+  authorize("SUPER_ADMIN", "EVENT_MANAGER", "STAFF"),
+  registrationsController.markCheckin
+);
 
 export default router;
