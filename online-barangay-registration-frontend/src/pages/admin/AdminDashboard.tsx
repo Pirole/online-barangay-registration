@@ -33,6 +33,7 @@ const AdminDashboard: React.FC = () => {
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [registrants, setRegistrants] = useState<RegistrantRow[]>([]);
   const [loadingRegs, setLoadingRegs] = useState(false);
+  const [selectedEventId, setSelectedEventId] = useState<string>("all");
   const [stats, setStats] = useState({
     totalEvents: 0,
     totalRegistrants: 0,
@@ -93,7 +94,6 @@ const AdminDashboard: React.FC = () => {
 
         const arr: any[] = [];
 
-        // Fetch registrants for each event (since /registrations?status=pending may not exist globally)
         for (const e of events) {
           try {
             const r = await apiFetch(
@@ -160,10 +160,14 @@ const AdminDashboard: React.FC = () => {
   const approveRegistrant = async (id: string): Promise<void> => {
     if (!confirm("Approve this registrant?")) return;
     try {
-      await apiFetch(`/registrations/${id}/approval`, {
-        method: "POST",
-        body: JSON.stringify({ status: "approved" }),
-      }, token);
+      await apiFetch(
+        `/registrations/${id}/approval`,
+        {
+          method: "POST",
+          body: JSON.stringify({ status: "approved" }),
+        },
+        token
+      );
       refresh();
     } catch (error: any) {
       alert(error.message || "Approve failed");
@@ -173,10 +177,14 @@ const AdminDashboard: React.FC = () => {
   const rejectRegistrant = async (id: string): Promise<void> => {
     if (!confirm("Reject this registrant?")) return;
     try {
-      await apiFetch(`/registrations/${id}/approval`, {
-        method: "POST",
-        body: JSON.stringify({ status: "rejected" }),
-      }, token);
+      await apiFetch(
+        `/registrations/${id}/approval`,
+        {
+          method: "POST",
+          body: JSON.stringify({ status: "rejected" }),
+        },
+        token
+      );
       refresh();
     } catch (error: any) {
       alert(error.message || "Reject failed");
@@ -197,6 +205,12 @@ const AdminDashboard: React.FC = () => {
     () => registrants.filter((r) => r.status === "pending"),
     [registrants]
   );
+
+  // 🎯 Filter pending registrants by eventId
+  const filteredPending =
+    selectedEventId === "all"
+      ? pending
+      : pending.filter((r) => r.eventId === selectedEventId);
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -302,8 +316,22 @@ const AdminDashboard: React.FC = () => {
       <section className="bg-white p-4 rounded shadow">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-medium">Pending Registrants</h2>
-          <div className="text-sm text-gray-500">
-            {loadingRegs ? "Loading..." : `${pending.length} pending`}
+
+          {/* 🧭 Filter Dropdown */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">Filter by Event:</label>
+            <select
+              value={selectedEventId}
+              onChange={(e) => setSelectedEventId(e.target.value)}
+              className="border rounded px-2 py-1 text-sm"
+            >
+              <option value="all">All Events</option>
+              {events.map((evt) => (
+                <option key={evt.id} value={evt.id}>
+                  {evt.title}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -319,7 +347,7 @@ const AdminDashboard: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {pending.map((row) => {
+              {filteredPending.map((row) => {
                 const name =
                   `${row.profile?.firstName || ""} ${
                     row.profile?.lastName || ""
@@ -359,10 +387,10 @@ const AdminDashboard: React.FC = () => {
                   </tr>
                 );
               })}
-              {pending.length === 0 && !loadingRegs && (
+              {filteredPending.length === 0 && !loadingRegs && (
                 <tr>
                   <td colSpan={5} className="p-4 text-gray-500">
-                    No pending registrants.
+                    No pending registrants found for this event.
                   </td>
                 </tr>
               )}
