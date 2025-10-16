@@ -2,6 +2,24 @@
 import { Request, Response, NextFunction } from "express";
 import { query } from "../config/database";
 import { AppError } from "../middleware/errorHandler";
+import path from "path";
+import fs from "fs";
+
+/**
+ * Utility: Ensure /uploads/events exists
+ */
+const eventUploadDir = path.join(__dirname, "..", "uploads", "events");
+if (!fs.existsSync(eventUploadDir)) {
+  fs.mkdirSync(eventUploadDir, { recursive: true });
+}
+
+/**
+ * Utility: Build image path
+ */
+const buildEventImagePath = (file?: Express.Multer.File) => {
+  if (!file) return null;
+  return `/uploads/events/${file.filename}`;
+};
 
 /**
  * GET /events
@@ -41,11 +59,11 @@ export const listEvents = async (req: Request, res: Response, next: NextFunction
 
     const where = whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : "";
 
-    // Get total count
+    // Total count
     const totalRes = await query(`SELECT COUNT(*) AS count FROM events e ${where}`, params);
     const total = Number(totalRes.rows[0].count);
 
-    // Get events with registrant counts
+    // Get events + registrant counts
     const rows = await query(
       `
       SELECT 
@@ -104,10 +122,38 @@ export const getEvent = async (req: Request, res: Response, next: NextFunction) 
 
 /**
  * POST /events
+ * (Super Admin only)
  */
 export const createEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { title, description, location, startDate, endDate, capacity, ageMin, ageMax, categoryId, managerId } = req.body;
+    const {
+      title,
+      description,
+      location,
+      startDate,
+      endDate,
+      capacity,
+      ageMin,
+      ageMax,
+      categoryId,
+      managerId,
+    } = req.body;
+
+    // Handle optional file upload
+    const photoPath = req.file ? buildEventImagePath(req.file) : null;
+
+    // Validate managerId
+    if (managerId) {
+      const managerCheck = await query(
+        `SELECT id, role FROM users WHERE id = $1 AND role = 'EVENT_MANAGER'`,
+        [managerId]
+      );
+      if (managerCheck.rowCount === 0) {
+        throw new AppError("Invalid manager ID. Must be an EVENT_MANAGER.", 400);
+      }
+    }
+
+    // Insert event
     const result = await query(
       `
       INSERT INTO events (
@@ -120,7 +166,7 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
         $6, $7, $8, $9, $10,
         true, NOW(), NOW()
       )
-      RETURNING id
+      RETURNING id, title
       `,
       [
         title,
@@ -136,7 +182,28 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
       ]
     );
 
-    res.status(201).json({ success: true, data: result.rows[0] });
+    const eventId = result.rows[0].id;
+
+    // Audit log
+    await query(
+      `
+      INSERT INTO audit_logs (id, actor_id, action, target_type, target_id, metadata, ip_address, user_agent, created_at)
+      VALUES (gen_random_uuid(), $1, 'CREATE', 'Event', $2, $3, $4, $5, NOW())
+      `,
+      [
+        req.user?.id || null,
+        eventId,
+        JSON.stringify({ title, managerId, photoPath }),
+        req.ip,
+        req.get("user-agent") || "unknown",
+      ]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Event created successfully",
+      data: { id: eventId },
+    });
   } catch (error) {
     next(error);
   }
@@ -144,67 +211,120 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
 
 /**
  * PUT /events/:id
+ * (Super Admin only)
  */
-export const updateEvent = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
+export const updateEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params.id;
-    const allowed: string[] = [
-      "title",
-      "description",
-      "location",
-      "startDate",
-      "endDate",
-      "capacity",
-      "ageMin",
-      "ageMax",
-      "isActive",
-      "managerId",
-    ];
 
-    const sets: string[] = [];
-    const vals: any[] = [];
+    // Check if event exists
+    const existing = await query(`SELECT * FROM events WHERE id = $1`, [id]);
+    if (existing.rowCount === 0) throw new AppError("Event not found", 404);
+
+    const {
+      title,
+      description,
+      location,
+      startDate,
+      endDate,
+      capacity,
+      ageMin,
+      ageMax,
+      isActive,
+      managerId,
+    } = req.body;
+
+    const photoPath = req.file ? buildEventImagePath(req.file) : undefined;
+
+    // Validate managerId if present
+    if (managerId) {
+      const managerCheck = await query(
+        `SELECT id, role FROM users WHERE id = $1 AND role = 'EVENT_MANAGER'`,
+        [managerId]
+      );
+      if (managerCheck.rowCount === 0) {
+        throw new AppError("Invalid manager ID. Must be an EVENT_MANAGER.", 400);
+      }
+    }
+
+    const updates: string[] = [];
+    const values: any[] = [];
     let idx = 1;
 
-    for (const key of Object.keys(req.body)) {
-      if (!allowed.includes(key)) continue;
-      const column = key.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
-      sets.push(`${column} = $${idx++}`);
-      vals.push((req.body as any)[key]);
-    }
+    const pushUpdate = (col: string, val: any) => {
+      updates.push(`${col} = $${idx++}`);
+      values.push(val);
+    };
 
-    if (sets.length === 0) {
-      res.json({ success: true, message: "No changes" });
-      return;
-    }
+    if (title) pushUpdate("title", title);
+    if (description) pushUpdate("description", description);
+    if (location) pushUpdate("location", location);
+    if (startDate) pushUpdate("start_date", startDate);
+    if (endDate) pushUpdate("end_date", endDate);
+    if (capacity) pushUpdate("capacity", capacity);
+    if (ageMin) pushUpdate("age_min", ageMin);
+    if (ageMax) pushUpdate("age_max", ageMax);
+    if (isActive !== undefined) pushUpdate("is_active", isActive);
+    if (managerId) pushUpdate("manager_id", managerId);
+    if (photoPath) pushUpdate("photo_path", photoPath);
 
-    vals.push(id);
+    if (updates.length === 0)
+      return res.json({ success: true, message: "No changes" });
 
+    values.push(id);
     await query(
-      `UPDATE events SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $${idx}`,
-      vals
+      `UPDATE events SET ${updates.join(", ")}, updated_at = NOW() WHERE id = $${idx}`,
+      values
     );
 
-    res.json({ success: true, message: "Event updated" });
-    return;
+    await query(
+      `
+      INSERT INTO audit_logs (id, actor_id, action, target_type, target_id, metadata, ip_address, user_agent, created_at)
+      VALUES (gen_random_uuid(), $1, 'UPDATE', 'Event', $2, $3, $4, $5, NOW())
+      `,
+      [
+        req.user?.id || null,
+        id,
+        JSON.stringify({ title, managerId }),
+        req.ip,
+        req.get("user-agent") || "unknown",
+      ]
+    );
+
+    res.json({ success: true, message: "Event updated successfully" });
   } catch (error) {
     next(error);
-    return;
   }
 };
 
-
 /**
  * DELETE /events/:id
+ * (Super Admin only)
  */
 export const deleteEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params.id;
+
+    const existing = await query(`SELECT title FROM events WHERE id = $1`, [id]);
+    if (existing.rowCount === 0) throw new AppError("Event not found", 404);
+
     await query(`DELETE FROM events WHERE id = $1`, [id]);
-    res.json({ success: true, message: "Event deleted" });
+
+    await query(
+      `
+      INSERT INTO audit_logs (id, actor_id, action, target_type, target_id, metadata, ip_address, user_agent, created_at)
+      VALUES (gen_random_uuid(), $1, 'DELETE', 'Event', $2, $3, $4, $5, NOW())
+      `,
+      [
+        req.user?.id || null,
+        id,
+        JSON.stringify({ title: existing.rows[0].title }),
+        req.ip,
+        req.get("user-agent") || "unknown",
+      ]
+    );
+
+    res.json({ success: true, message: "Event deleted successfully" });
   } catch (error) {
     next(error);
   }
