@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { apiFetch } from "../../lib/api";
+import { useNavigate } from "react-router-dom";
 
 interface EventData {
   id?: string;
@@ -36,6 +37,17 @@ interface ModalProps {
   event?: EventData | null;
   onSave: (data: EventData) => void;
 }
+const { logout } = useAuth() as any;
+const navigate = useNavigate()
+const handleLogout = (): void => {
+    if (logout) {
+      logout();
+    } else {
+      localStorage.clear();
+      sessionStorage.clear();
+    }
+    navigate("/login");
+  };
 
 const EventModal: React.FC<ModalProps> = ({ open, onClose, event, onSave }) => {
   const [formData, setFormData] = useState<EventData>({
@@ -302,7 +314,14 @@ const EventManagement: React.FC = () => {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold">Event Management</h1>
+        <button
+            onClick={handleLogout}
+            className="px-3 py-1 rounded bg-gray-600 text-white hover:bg-gray-700"
+          >
+            Logout
+          </button>
         {canEdit && (
+          
           <button
             onClick={() => {
               setEditingEvent(null);
@@ -312,9 +331,10 @@ const EventManagement: React.FC = () => {
           >
             + Create Event
           </button>
+          
         )}
       </div>
-
+          
       {error && <div className="text-red-600 mb-3">{error}</div>}
 
       <div className="bg-white p-4 rounded shadow overflow-x-auto">

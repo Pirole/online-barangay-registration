@@ -108,6 +108,7 @@ model Event {
   ageMin          Int?      @map("age_min")
   ageMax          Int?      @map("age_max")
   isActive        Boolean   @default(true) @map("is_active")
+  photoPath       String?   @map("photo_path")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
