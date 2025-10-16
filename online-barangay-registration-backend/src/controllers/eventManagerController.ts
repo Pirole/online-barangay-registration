@@ -40,7 +40,7 @@ export const createEventManager = async (
   next: NextFunction
 ) => {
   try {
-    const { email, password, firstName, lastName } = req.body;
+    const { email, password, firstName, lastName, phone } = req.body;
 
     if (!email || !password) {
       throw new AppError("Email and password are required", 400);
@@ -51,15 +51,21 @@ export const createEventManager = async (
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // ✅ Create user + optional profile
     const newManager = await prisma.user.create({
       data: {
         email,
-        passwordHash: hashedPassword, // ✅ FIXED HERE
+        passwordHash: hashedPassword,
         role: "EVENT_MANAGER",
-        // optional fields
-        ...(firstName ? { firstName } : {}),
-        ...(lastName ? { lastName } : {}),
+        phone: phone || null,
+        profile: {
+          create: {
+            firstName: firstName || null,
+            lastName: lastName || null,
+          },
+        },
       },
+      include: { profile: true },
     });
 
     logger.info(`✅ Created Event Manager: ${newManager.email}`);
@@ -70,6 +76,7 @@ export const createEventManager = async (
         id: newManager.id,
         email: newManager.email,
         role: newManager.role,
+        profile: newManager.profile,
       },
       message: "Event Manager created successfully",
     });
