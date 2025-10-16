@@ -1,24 +1,27 @@
 // src/controllers/events.ts
 import { Request, Response, NextFunction } from "express";
-import { query } from "../config/database";
-import { AppError } from "../middleware/errorHandler";
 import path from "path";
 import fs from "fs";
+import { query } from "../config/database";
+import { AppError } from "../middleware/errorHandler";
+import { logger } from "../utils/logger";
+import prisma from "../config/prisma"; // ✅ for audit logging only
 
 /**
- * Utility: Ensure /uploads/events exists
+ * Helper: Save uploaded event photo
  */
-const eventUploadDir = path.join(__dirname, "..", "uploads", "events");
-if (!fs.existsSync(eventUploadDir)) {
-  fs.mkdirSync(eventUploadDir, { recursive: true });
-}
-
-/**
- * Utility: Build image path
- */
-const buildEventImagePath = (file?: Express.Multer.File) => {
+const saveEventPhoto = (file?: Express.Multer.File): string | null => {
   if (!file) return null;
-  return `/uploads/events/${file.filename}`;
+
+  const uploadsDir = path.join(process.cwd(), "uploads", "events");
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+
+  const fileName = `${Date.now()}_${file.originalname.replace(/\s+/g, "_")}`;
+  const filePath = path.join(uploadsDir, fileName);
+  fs.writeFileSync(filePath, file.buffer);
+  return `/uploads/events/${fileName}`;
 };
 
 /**
@@ -34,21 +37,18 @@ export const listEvents = async (req: Request, res: Response, next: NextFunction
     const params: any[] = [];
     let idx = 1;
 
-    // Optional search filter
     if (search) {
       whereClauses.push(`(e.title ILIKE $${idx} OR e.description ILIKE $${idx})`);
       params.push(`%${search}%`);
       idx++;
     }
 
-    // Optional manager filter
     if (managerId) {
       whereClauses.push(`e.manager_id = $${idx}`);
       params.push(managerId);
       idx++;
     }
 
-    // Status filter
     if (status === "upcoming") {
       whereClauses.push(`e.start_date > NOW()`);
     } else if (status === "ongoing") {
@@ -59,11 +59,9 @@ export const listEvents = async (req: Request, res: Response, next: NextFunction
 
     const where = whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : "";
 
-    // Total count
     const totalRes = await query(`SELECT COUNT(*) AS count FROM events e ${where}`, params);
     const total = Number(totalRes.rows[0].count);
 
-    // Get events + registrant counts
     const rows = await query(
       `
       SELECT 
@@ -77,6 +75,9 @@ export const listEvents = async (req: Request, res: Response, next: NextFunction
         e.age_min,
         e.age_max,
         e.is_active,
+        e.manager_id,
+        e.category_id,
+        e.photo_path,
         e.created_at,
         e.updated_at,
         COUNT(r.id) AS registrant_count
@@ -122,7 +123,6 @@ export const getEvent = async (req: Request, res: Response, next: NextFunction) 
 
 /**
  * POST /events
- * (Super Admin only)
  */
 export const createEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -139,34 +139,21 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
       managerId,
     } = req.body;
 
-    // Handle optional file upload
-    const photoPath = req.file ? buildEventImagePath(req.file) : null;
+    const photoPath = saveEventPhoto(req.file);
 
-    // Validate managerId
-    if (managerId) {
-      const managerCheck = await query(
-        `SELECT id, role FROM users WHERE id = $1 AND role = 'EVENT_MANAGER'`,
-        [managerId]
-      );
-      if (managerCheck.rowCount === 0) {
-        throw new AppError("Invalid manager ID. Must be an EVENT_MANAGER.", 400);
-      }
-    }
-
-    // Insert event
     const result = await query(
       `
       INSERT INTO events (
         id, title, description, location, start_date, end_date,
         capacity, age_min, age_max, category_id, manager_id,
-        is_active, created_at, updated_at
+        photo_path, is_active, created_at, updated_at
       )
       VALUES (
         gen_random_uuid(), $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
-        true, NOW(), NOW()
+        $11, true, NOW(), NOW()
       )
-      RETURNING id, title
+      RETURNING id
       `,
       [
         title,
@@ -179,31 +166,31 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
         ageMax || null,
         categoryId,
         managerId || null,
+        photoPath,
       ]
     );
 
-    const eventId = result.rows[0].id;
+    const newEventId = result.rows[0].id;
 
-    // Audit log
-    await query(
-      `
-      INSERT INTO audit_logs (id, actor_id, action, target_type, target_id, metadata, ip_address, user_agent, created_at)
-      VALUES (gen_random_uuid(), $1, 'CREATE', 'Event', $2, $3, $4, $5, NOW())
-      `,
-      [
-        req.user?.id || null,
-        eventId,
-        JSON.stringify({ title, managerId, photoPath }),
-        req.ip,
-        req.get("user-agent") || "unknown",
-      ]
-    );
+    // ✅ Audit Log
+    const actor = (req as any).user;
+    if (actor) {
+      await prisma.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: "CREATE",
+          targetType: "EVENT",
+          targetId: newEventId,
+          metadata: { title },
+          ipAddress: req.ip,
+          userAgent: req.get("User-Agent") || "",
+        },
+      });
+    }
 
-    res.status(201).json({
-      success: true,
-      message: "Event created successfully",
-      data: { id: eventId },
-    });
+    logger.info(`✅ Created new event: ${title} by ${actor?.email || "unknown"}`);
+
+    res.status(201).json({ success: true, data: { id: newEventId } });
   } catch (error) {
     next(error);
   }
@@ -211,87 +198,72 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
 
 /**
  * PUT /events/:id
- * (Super Admin only)
  */
 export const updateEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params.id;
+    const allowed = [
+      "title",
+      "description",
+      "location",
+      "startDate",
+      "endDate",
+      "capacity",
+      "ageMin",
+      "ageMax",
+      "isActive",
+      "managerId",
+      "categoryId",
+    ];
 
-    // Check if event exists
-    const existing = await query(`SELECT * FROM events WHERE id = $1`, [id]);
-    if (existing.rowCount === 0) throw new AppError("Event not found", 404);
-
-    const {
-      title,
-      description,
-      location,
-      startDate,
-      endDate,
-      capacity,
-      ageMin,
-      ageMax,
-      isActive,
-      managerId,
-    } = req.body;
-
-    const photoPath = req.file ? buildEventImagePath(req.file) : undefined;
-
-    // Validate managerId if present
-    if (managerId) {
-      const managerCheck = await query(
-        `SELECT id, role FROM users WHERE id = $1 AND role = 'EVENT_MANAGER'`,
-        [managerId]
-      );
-      if (managerCheck.rowCount === 0) {
-        throw new AppError("Invalid manager ID. Must be an EVENT_MANAGER.", 400);
-      }
-    }
-
-    const updates: string[] = [];
-    const values: any[] = [];
+    const sets: string[] = [];
+    const vals: any[] = [];
     let idx = 1;
 
-    const pushUpdate = (col: string, val: any) => {
-      updates.push(`${col} = $${idx++}`);
-      values.push(val);
-    };
+    for (const key of Object.keys(req.body)) {
+      if (!allowed.includes(key)) continue;
+      const column = key.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
+      sets.push(`${column} = $${idx++}`);
+      vals.push((req.body as any)[key]);
+    }
 
-    if (title) pushUpdate("title", title);
-    if (description) pushUpdate("description", description);
-    if (location) pushUpdate("location", location);
-    if (startDate) pushUpdate("start_date", startDate);
-    if (endDate) pushUpdate("end_date", endDate);
-    if (capacity) pushUpdate("capacity", capacity);
-    if (ageMin) pushUpdate("age_min", ageMin);
-    if (ageMax) pushUpdate("age_max", ageMax);
-    if (isActive !== undefined) pushUpdate("is_active", isActive);
-    if (managerId) pushUpdate("manager_id", managerId);
-    if (photoPath) pushUpdate("photo_path", photoPath);
+    // ✅ Handle photo upload (if provided)
+    const newPhotoPath = saveEventPhoto(req.file);
+    if (newPhotoPath) {
+      sets.push(`photo_path = $${idx++}`);
+      vals.push(newPhotoPath);
+    }
 
-    if (updates.length === 0)
-      return res.json({ success: true, message: "No changes" });
+    if (sets.length === 0) {
+      res.json({ success: true, message: "No changes" });
+      return;
+    }
 
-    values.push(id);
-    await query(
-      `UPDATE events SET ${updates.join(", ")}, updated_at = NOW() WHERE id = $${idx}`,
-      values
-    );
+    vals.push(id);
 
     await query(
-      `
-      INSERT INTO audit_logs (id, actor_id, action, target_type, target_id, metadata, ip_address, user_agent, created_at)
-      VALUES (gen_random_uuid(), $1, 'UPDATE', 'Event', $2, $3, $4, $5, NOW())
-      `,
-      [
-        req.user?.id || null,
-        id,
-        JSON.stringify({ title, managerId }),
-        req.ip,
-        req.get("user-agent") || "unknown",
-      ]
+      `UPDATE events SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $${idx}`,
+      vals
     );
 
-    res.json({ success: true, message: "Event updated successfully" });
+    // ✅ Audit Log
+    const actor = (req as any).user;
+    if (actor) {
+      await prisma.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: "UPDATE",
+          targetType: "EVENT",
+          targetId: id,
+          metadata: { updatedFields: sets },
+          ipAddress: req.ip,
+          userAgent: req.get("User-Agent") || "",
+        },
+      });
+    }
+
+    logger.info(`✏️ Updated event ${id} by ${actor?.email || "unknown"}`);
+    res.json({ success: true, message: "Event updated" });
   } catch (error) {
     next(error);
   }
@@ -299,32 +271,34 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
 
 /**
  * DELETE /events/:id
- * (Super Admin only)
  */
 export const deleteEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params.id;
 
     const existing = await query(`SELECT title FROM events WHERE id = $1`, [id]);
-    if (existing.rowCount === 0) throw new AppError("Event not found", 404);
+    if (existing.rows.length === 0) throw new AppError("Event not found", 404);
 
     await query(`DELETE FROM events WHERE id = $1`, [id]);
 
-    await query(
-      `
-      INSERT INTO audit_logs (id, actor_id, action, target_type, target_id, metadata, ip_address, user_agent, created_at)
-      VALUES (gen_random_uuid(), $1, 'DELETE', 'Event', $2, $3, $4, $5, NOW())
-      `,
-      [
-        req.user?.id || null,
-        id,
-        JSON.stringify({ title: existing.rows[0].title }),
-        req.ip,
-        req.get("user-agent") || "unknown",
-      ]
-    );
+    // ✅ Audit Log
+    const actor = (req as any).user;
+    if (actor) {
+      await prisma.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: "DELETE",
+          targetType: "EVENT",
+          targetId: id,
+          metadata: { title: existing.rows[0].title },
+          ipAddress: req.ip,
+          userAgent: req.get("User-Agent") || "",
+        },
+      });
+    }
 
-    res.json({ success: true, message: "Event deleted successfully" });
+    logger.info(`🗑️ Deleted event ${id} by ${actor?.email || "unknown"}`);
+    res.json({ success: true, message: "Event deleted" });
   } catch (error) {
     next(error);
   }

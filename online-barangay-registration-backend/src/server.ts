@@ -15,6 +15,7 @@ import routes from "./routes";
 import registrationRoutes from "./routes/registrations";
 import { logger } from "./utils/logger";
 import { connectDatabase } from "./config/database";
+import eventRoutes from "./routes/events";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { requestLogger } from "./middleware/requestLogger";
 import eventManagerRoutes from "./routes/eventManagerRoutes";
@@ -65,7 +66,7 @@ if (!isDev) {
 } else {
   logger.info("🧪 Rate limiter disabled in development mode");
 }
-
+app.use(`/api/${API_VERSION}/events`, eventRoutes);
 app.use(compression());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
