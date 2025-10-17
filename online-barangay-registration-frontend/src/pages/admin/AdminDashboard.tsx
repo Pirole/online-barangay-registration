@@ -1,3 +1,4 @@
+// src/pages/admin/AdminDashboard.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
@@ -24,6 +25,20 @@ interface RegistrantRow {
   created_at?: string;
 }
 
+interface EventFormData {
+  title: string;
+  description?: string;
+  location?: string;
+  start_date?: string;
+  end_date?: string;
+  capacity?: number;
+  age_min?: number;
+  age_max?: number;
+  managerId?: string;
+  categoryId?: string;
+  photo?: File | null;
+}
+
 const AdminDashboard: React.FC = () => {
   const { user, token, logout } = useAuth() as any;
   const navigate = useNavigate();
@@ -41,6 +56,20 @@ const AdminDashboard: React.FC = () => {
   });
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [formData, setFormData] = useState<EventFormData>({
+    title: "",
+    description: "",
+    location: "",
+    start_date: "",
+    end_date: "",
+    managerId: "",
+    categoryId: "",
+    photo: null,
+  });
+  const [categories, setCategories] = useState<any[]>([]);
+  const [managers, setManagers] = useState<any[]>([]);
 
   // 🔄 Load Events
   useEffect(() => {
@@ -84,6 +113,22 @@ const AdminDashboard: React.FC = () => {
     load();
   }, [role, token, user?.id, refreshKey]);
 
+  // 🔄 Load categories and event managers (for modal)
+  useEffect(() => {
+    const loadMeta = async () => {
+      if (!token) return;
+      try {
+        const catRes = await apiFetch("/categories", {}, token);
+        const mgrRes = await apiFetch("/event-managers", {}, token);
+        setCategories(catRes.data || []);
+        setManagers(mgrRes.data || []);
+      } catch (err) {
+        console.warn("Failed to load categories/managers");
+      }
+    };
+    loadMeta();
+  }, [token]);
+
   // 🔄 Load Registrants (Pending)
   useEffect(() => {
     const loadRegs = async (): Promise<void> => {
@@ -104,7 +149,7 @@ const AdminDashboard: React.FC = () => {
             (r.data || []).forEach((reg: any) =>
               arr.push({ ...reg, eventTitle: e.title, eventId: e.id })
             );
-          } catch (err) {
+          } catch {
             console.warn(`Failed to fetch registrants for event ${e.title}`);
           }
         }
@@ -192,13 +237,39 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleLogout = (): void => {
-    if (logout) {
-      logout();
-    } else {
+    if (logout) logout();
+    else {
       localStorage.clear();
       sessionStorage.clear();
     }
     navigate("/login");
+  };
+
+  const handleCreateEvent = async (): Promise<void> => {
+    const data = new FormData();
+    Object.entries(formData).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== "")
+        data.append(key, value as any);
+    });
+
+    try {
+      await apiFetch("/events", { method: "POST", body: data }, token);
+      alert("Event created successfully!");
+      setModalOpen(false);
+      setFormData({
+        title: "",
+        description: "",
+        location: "",
+        start_date: "",
+        end_date: "",
+        managerId: "",
+        categoryId: "",
+        photo: null,
+      });
+      refresh();
+    } catch (error: any) {
+      alert(error.message || "Failed to create event");
+    }
   };
 
   const pending = useMemo(
@@ -206,7 +277,6 @@ const AdminDashboard: React.FC = () => {
     [registrants]
   );
 
-  // 🎯 Filter pending registrants by eventId
   const filteredPending =
     selectedEventId === "all"
       ? pending
@@ -228,6 +298,14 @@ const AdminDashboard: React.FC = () => {
           >
             Refresh
           </button>
+          {role === "SUPER_ADMIN" && (
+            <button
+              onClick={() => setModalOpen(true)}
+              className="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700"
+            >
+              + Create Event
+            </button>
+          )}
           <button
             onClick={handleLogout}
             className="px-3 py-1 rounded bg-gray-600 text-white hover:bg-gray-700"
@@ -243,7 +321,128 @@ const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {error && <div className="mb-4 text-red-600">{error}</div>}
+      {/* Create Event Modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded shadow-lg w-full max-w-2xl">
+            <h2 className="text-lg font-semibold mb-4">Create Event</h2>
+
+            <div className="space-y-2">
+              <input
+                type="text"
+                placeholder="Title"
+                value={formData.title}
+                onChange={(e) =>
+                  setFormData({ ...formData, title: e.target.value })
+                }
+                className="w-full border rounded p-2"
+              />
+              <textarea
+                placeholder="Description"
+                value={formData.description}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
+                className="w-full border rounded p-2"
+              />
+              <input
+                type="text"
+                placeholder="Location"
+                value={formData.location}
+                onChange={(e) =>
+                  setFormData({ ...formData, location: e.target.value })
+                }
+                className="w-full border rounded p-2"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="datetime-local"
+                  value={formData.start_date || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, start_date: e.target.value })
+                  }
+                  className="w-full border rounded p-2"
+                />
+                <input
+                  type="datetime-local"
+                  value={formData.end_date || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, end_date: e.target.value })
+                  }
+                  className="w-full border rounded p-2"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="number"
+                  placeholder="Capacity (optional)"
+                  value={formData.capacity || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, capacity: Number(e.target.value) })
+                  }
+                  className="w-full border rounded p-2"
+                />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      photo: e.target.files ? e.target.files[0] : null,
+                    })
+                  }
+                  className="w-full border rounded p-2"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={formData.categoryId || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, categoryId: e.target.value })
+                  }
+                  className="border rounded p-2"
+                >
+                  <option value="">Select Category</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={formData.managerId || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, managerId: e.target.value })
+                  }
+                  className="border rounded p-2"
+                >
+                  <option value="">Assign Manager</option>
+                  {managers.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.profile?.firstName} {m.profile?.lastName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end mt-4 gap-2">
+              <button
+                onClick={() => setModalOpen(false)}
+                className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateEvent}
+                className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Save Event
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
@@ -323,7 +522,6 @@ const AdminDashboard: React.FC = () => {
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-medium">Pending Registrants</h2>
 
-          {/* 🧭 Filter Dropdown */}
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-600">Filter by Event:</label>
             <select
