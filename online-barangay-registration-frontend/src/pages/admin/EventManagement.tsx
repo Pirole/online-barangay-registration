@@ -1,4 +1,3 @@
-// src/pages/admin/EventManagement.tsx
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { apiFetch } from "../../lib/api";
@@ -37,17 +36,6 @@ interface ModalProps {
   event?: EventData | null;
   onSave: (data: EventData) => void;
 }
-const { logout } = useAuth() as any;
-const navigate = useNavigate()
-const handleLogout = (): void => {
-    if (logout) {
-      logout();
-    } else {
-      localStorage.clear();
-      sessionStorage.clear();
-    }
-    navigate("/login");
-  };
 
 const EventModal: React.FC<ModalProps> = ({ open, onClose, event, onSave }) => {
   const [formData, setFormData] = useState<EventData>({
@@ -78,9 +66,7 @@ const EventModal: React.FC<ModalProps> = ({ open, onClose, event, onSave }) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSave = () => {
-    onSave(formData);
-  };
+  const handleSave = () => onSave(formData);
 
   if (!open) return null;
 
@@ -246,7 +232,18 @@ const RegistrantModal: React.FC<RegistrantModalProps> = ({
 // MAIN PAGE
 // ====================
 const EventManagement: React.FC = () => {
-  const { user, token } = useAuth() as any;
+  const { user, token, logout } = useAuth() as any;
+  const navigate = useNavigate();
+
+  const handleLogout = (): void => {
+    if (logout) logout();
+    else {
+      localStorage.clear();
+      sessionStorage.clear();
+    }
+    navigate("/login");
+  };
+
   const role = (user?.role || "").toUpperCase();
   const canEdit = ["SUPER_ADMIN", "EVENT_MANAGER"].includes(role);
 
@@ -314,27 +311,27 @@ const EventManagement: React.FC = () => {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold">Event Management</h1>
-        <button
+        <div className="flex gap-3">
+          <button
             onClick={handleLogout}
             className="px-3 py-1 rounded bg-gray-600 text-white hover:bg-gray-700"
           >
             Logout
           </button>
-        {canEdit && (
-          
-          <button
-            onClick={() => {
-              setEditingEvent(null);
-              setModalOpen(true);
-            }}
-            className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            + Create Event
-          </button>
-          
-        )}
+          {canEdit && (
+            <button
+              onClick={() => {
+                setEditingEvent(null);
+                setModalOpen(true);
+              }}
+              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              + Create Event
+            </button>
+          )}
+        </div>
       </div>
-          
+
       {error && <div className="text-red-600 mb-3">{error}</div>}
 
       <div className="bg-white p-4 rounded shadow overflow-x-auto">
