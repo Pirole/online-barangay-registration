@@ -124,7 +124,11 @@ export const getEvent = async (req: Request, res: Response, next: NextFunction) 
 /**
  * POST /events
  */
-export const createEvent = async (req: Request, res: Response, next: NextFunction) => {
+export const createEvent = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<Response | void> => {
   try {
     // Accept both camelCase and snake_case from frontend
     const {
@@ -149,7 +153,8 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
     if (!title || !location || !finalStartDate || !finalEndDate || !categoryId) {
       return res.status(400).json({
         success: false,
-        message: "Missing required fields (title, location, startDate, endDate, categoryId)",
+        message:
+          "Missing required fields (title, location, startDate, endDate, categoryId)",
       });
     }
 
@@ -204,13 +209,13 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
 
     logger.info(`✅ Created new event: ${title} by ${actor?.email || "unknown"}`);
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: { id: newEventId },
       message: "Event created successfully",
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 };
 
