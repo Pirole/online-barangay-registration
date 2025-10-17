@@ -323,126 +323,186 @@ const AdminDashboard: React.FC = () => {
 
       {/* Create Event Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded shadow-lg w-full max-w-2xl">
-            <h2 className="text-lg font-semibold mb-4">Create Event</h2>
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="bg-white p-6 rounded shadow-lg w-full max-w-2xl overflow-y-auto max-h-[90vh]">
+      <h2 className="text-xl font-semibold mb-4">Create New Event</h2>
 
-            <div className="space-y-2">
-              <input
-                type="text"
-                placeholder="Title"
-                value={formData.title}
-                onChange={(e) =>
-                  setFormData({ ...formData, title: e.target.value })
-                }
-                className="w-full border rounded p-2"
-              />
-              <textarea
-                placeholder="Description"
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-                className="w-full border rounded p-2"
-              />
-              <input
-                type="text"
-                placeholder="Location"
-                value={formData.location}
-                onChange={(e) =>
-                  setFormData({ ...formData, location: e.target.value })
-                }
-                className="w-full border rounded p-2"
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="datetime-local"
-                  value={formData.start_date || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, start_date: e.target.value })
-                  }
-                  className="w-full border rounded p-2"
-                />
-                <input
-                  type="datetime-local"
-                  value={formData.end_date || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, end_date: e.target.value })
-                  }
-                  className="w-full border rounded p-2"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="number"
-                  placeholder="Capacity (optional)"
-                  value={formData.capacity || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, capacity: Number(e.target.value) })
-                  }
-                  className="w-full border rounded p-2"
-                />
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      photo: e.target.files ? e.target.files[0] : null,
-                    })
-                  }
-                  className="w-full border rounded p-2"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <select
-                  value={formData.categoryId || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, categoryId: e.target.value })
-                  }
-                  className="border rounded p-2"
-                >
-                  <option value="">Select Category</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={formData.managerId || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, managerId: e.target.value })
-                  }
-                  className="border rounded p-2"
-                >
-                  <option value="">Assign Manager</option>
-                  {managers.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.profile?.firstName} {m.profile?.lastName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+      <div className="space-y-4">
+        {/* Title */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Event Title <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={formData.title}
+            onChange={(e) =>
+              setFormData({ ...formData, title: e.target.value })
+            }
+            className="w-full border rounded p-2"
+            placeholder="e.g. Barangay Tree-Planting Day"
+          />
+        </div>
 
-            <div className="flex justify-end mt-4 gap-2">
-              <button
-                onClick={() => setModalOpen(false)}
-                className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateEvent}
-                className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                Save Event
-              </button>
-            </div>
+        {/* Description */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Description
+          </label>
+          <textarea
+            value={formData.description}
+            onChange={(e) =>
+              setFormData({ ...formData, description: e.target.value })
+            }
+            className="w-full border rounded p-2"
+            placeholder="Short description of the event"
+          />
+        </div>
+
+        {/* Location */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Location <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={formData.location}
+            onChange={(e) =>
+              setFormData({ ...formData, location: e.target.value })
+            }
+            className="w-full border rounded p-2"
+            placeholder="Barangay Hall, Covered Court, etc."
+          />
+        </div>
+
+        {/* Dates */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Start Date / Time <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="datetime-local"
+              value={formData.start_date || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, start_date: e.target.value })
+              }
+              className="w-full border rounded p-2"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              End Date / Time <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="datetime-local"
+              value={formData.end_date || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, end_date: e.target.value })
+              }
+              className="w-full border rounded p-2"
+            />
           </div>
         </div>
-      )}
+
+        {/* Capacity + Photo */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Capacity (optional)
+            </label>
+            <input
+              type="number"
+              min="0"
+              value={formData.capacity || ""}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  capacity: e.target.value ? Number(e.target.value) : undefined,
+                })
+              }
+              className="w-full border rounded p-2"
+              placeholder="e.g. 200"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Event Photo (optional)
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  photo: e.target.files ? e.target.files[0] : null,
+                })
+              }
+              className="w-full border rounded p-2"
+            />
+          </div>
+        </div>
+
+        {/* Category + Manager */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Category <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={formData.categoryId || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, categoryId: e.target.value })
+              }
+              className="border rounded p-2 w-full"
+            >
+              <option value="">Select Category</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Assign Manager <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={formData.managerId || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, managerId: e.target.value })
+              }
+              className="border rounded p-2 w-full"
+            >
+              <option value="">Select Event Manager</option>
+              {managers.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.profile?.firstName} {m.profile?.lastName}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end mt-5 gap-2">
+        <button
+          onClick={() => setModalOpen(false)}
+          className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleCreateEvent}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          Save Event
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
