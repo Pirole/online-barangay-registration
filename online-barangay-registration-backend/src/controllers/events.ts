@@ -126,18 +126,32 @@ export const getEvent = async (req: Request, res: Response, next: NextFunction) 
  */
 export const createEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Accept both camelCase and snake_case from frontend
     const {
       title,
       description,
       location,
       startDate,
       endDate,
+      start_date,
+      end_date,
       capacity,
       ageMin,
       ageMax,
       categoryId,
       managerId,
     } = req.body;
+
+    // Normalize to the correct variable names for SQL
+    const finalStartDate = startDate || start_date;
+    const finalEndDate = endDate || end_date;
+
+    if (!title || !location || !finalStartDate || !finalEndDate || !categoryId) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields (title, location, startDate, endDate, categoryId)",
+      });
+    }
 
     const photoPath = saveEventPhoto(req.file);
 
@@ -159,8 +173,8 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
         title,
         description || null,
         location,
-        startDate,
-        endDate,
+        finalStartDate,
+        finalEndDate,
         capacity || null,
         ageMin || null,
         ageMax || null,
@@ -190,7 +204,11 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
 
     logger.info(`✅ Created new event: ${title} by ${actor?.email || "unknown"}`);
 
-    res.status(201).json({ success: true, data: { id: newEventId } });
+    res.status(201).json({
+      success: true,
+      data: { id: newEventId },
+      message: "Event created successfully",
+    });
   } catch (error) {
     next(error);
   }

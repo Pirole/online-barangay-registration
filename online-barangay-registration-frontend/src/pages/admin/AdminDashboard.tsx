@@ -477,10 +477,12 @@ const AdminDashboard: React.FC = () => {
             >
               <option value="">Select Event Manager</option>
               {managers.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.profile?.firstName} {m.profile?.lastName}
-                </option>
-              ))}
+  <option key={m.id} value={m.id}>
+    {m.profile?.firstName || ""} {m.profile?.lastName || ""} 
+    {(!m.profile?.firstName && !m.profile?.lastName) ? `(${m.firstName})` : ""}
+  </option>
+))}
+
             </select>
           </div>
         </div>
