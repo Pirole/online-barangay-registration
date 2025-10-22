@@ -176,6 +176,24 @@ export const listRegistrantsForEvent = async (
 ) => {
   try {
     const { eventId } = req.params;
+    const user = (req as any).user;
+
+    // ✅ Authorization: Event Managers can only access their own events
+    if (user?.role === "EVENT_MANAGER") {
+      const event = await prisma.event.findUnique({
+        where: { id: eventId },
+        select: { managerId: true },
+      });
+
+      if (!event || event.managerId !== user.id) {
+        throw new AppError(
+          "Forbidden: You can only view registrants for your assigned events.",
+          403
+        );
+      }
+    }
+
+    // ✅ Pagination and filtering
     const page = Number(req.query.page ?? 1);
     const limit = Number(req.query.limit ?? 50);
     const status = (req.query.status as string)?.toUpperCase() || "ALL";
@@ -184,6 +202,7 @@ export const listRegistrantsForEvent = async (
     const whereClause: any = { eventId };
     if (status !== "ALL") whereClause.status = status;
 
+    // ✅ Fetch registrations
     const [rows, total] = await Promise.all([
       prisma.registration.findMany({
         where: whereClause,
@@ -207,15 +226,21 @@ export const listRegistrantsForEvent = async (
       prisma.registration.count({ where: whereClause }),
     ]);
 
+    // ✅ Format and merge custom values
     const result = rows.map((r) => {
       let customVals: Record<string, any> = {};
+
       if (typeof r.customValues === "string") {
         try {
           customVals = JSON.parse(r.customValues);
         } catch {
           customVals = {};
         }
-      } else if (r.customValues && typeof r.customValues === "object" && !Array.isArray(r.customValues)) {
+      } else if (
+        r.customValues &&
+        typeof r.customValues === "object" &&
+        !Array.isArray(r.customValues)
+      ) {
         customVals = r.customValues as Record<string, any>;
       }
 
@@ -248,6 +273,7 @@ export const listRegistrantsForEvent = async (
       };
     });
 
+    // ✅ Response
     res.json({
       success: true,
       data: result,
@@ -257,6 +283,7 @@ export const listRegistrantsForEvent = async (
     next(error);
   }
 };
+
 
 
 
@@ -283,25 +310,50 @@ export const getRegistration = async (req: Request, res: Response, next: NextFun
 /**
  * POST /registrations/:id/approval — Approve/Reject
  */
-export const approveOrRejectRegistration = async (req: Request, res: Response, next: NextFunction) => {
+export const approveOrRejectRegistration = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const id = req.params.id;
+    const { id } = req.params;
     const { status } = req.body;
 
-    if (!["approved", "rejected"].includes((status || "").toLowerCase())) {
-      throw new AppError("Invalid status", 400);
+    // ✅ Validate status input
+    const normalizedStatus = (status || "").toLowerCase();
+    if (!["approved", "rejected"].includes(normalizedStatus)) {
+      throw new AppError("Invalid status. Must be 'approved' or 'rejected'.", 400);
     }
 
-    const updated = await prisma.registration.update({
+    // ✅ Fetch registration first (so we know eventId for middleware checks)
+    const registration = await prisma.registration.findUnique({
       where: { id },
-      data: { status: status.toUpperCase() },
+      select: { id: true, eventId: true, status: true },
     });
 
-    res.json({ success: true, message: `Registration ${status}`, data: updated });
+    if (!registration) {
+      throw new AppError("Registration not found.", 404);
+    }
+
+    // ✅ Attach eventId to request for downstream middlewares (if needed)
+    (req as any).eventId = registration.eventId;
+
+    // ✅ Update the registration status
+    const updated = await prisma.registration.update({
+      where: { id },
+      data: { status: normalizedStatus.toUpperCase() },
+    });
+
+    res.json({
+      success: true,
+      message: `Registration ${normalizedStatus}`,
+      data: updated,
+    });
   } catch (error) {
     next(error);
   }
 };
+
 
 /**
  * POST /registrations/:id/checkin — Mark attendance

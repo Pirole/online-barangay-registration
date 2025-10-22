@@ -3,6 +3,8 @@ import jwt from "jsonwebtoken";
 import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
 import { AppError } from "./errorHandler";
+import { PrismaClient } from "@prisma/client";
+
 
 interface JwtPayload {
   userId: string;
@@ -28,6 +30,7 @@ declare global {
     }
   }
 }
+const prismaAuth = new PrismaClient();
 
 export const authenticateToken = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -127,5 +130,35 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
   } catch (error) {
     // optional auth just ignores errors
     next();
+  }
+};
+
+export const restrictToAssignedEvents = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user;
+    if (!user) return next(new AppError("Authentication required", 401));
+
+    // ✅ Super Admin bypasses restriction
+    if (user.role === "SUPER_ADMIN") return next();
+
+    // Only check for event-specific routes
+    const eventId = req.params.eventId || req.body.eventId;
+    if (!eventId) return next(new AppError("Event ID required", 400));
+
+    // 🔍 Verify ownership
+    const event = await prismaAuth.event.findUnique({
+      where: { id: eventId },
+      select: { managerId: true },
+    });
+
+    if (!event) return next(new AppError("Event not found", 404));
+    if (user.role === "EVENT_MANAGER" && event.managerId !== user.id) {
+      return next(new AppError("Forbidden: Not your assigned event", 403));
+    }
+
+    // Allow STAFF and future roles to pass if needed (read-only)
+    next();
+  } catch (err) {
+    next(err);
   }
 };
