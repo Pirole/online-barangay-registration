@@ -33,22 +33,34 @@ export const listEvents = async (req: Request, res: Response, next: NextFunction
     const { status = "upcoming", search, page = 1, limit = 20, managerId } = req.query as any;
     const offset = (Number(page) - 1) * Number(limit);
 
+    const user = (req as any).user; // ✅ from JWT middleware
     const whereClauses: string[] = [];
     const params: any[] = [];
     let idx = 1;
 
+    // 🔍 Optional search filter
     if (search) {
       whereClauses.push(`(e.title ILIKE $${idx} OR e.description ILIKE $${idx})`);
       params.push(`%${search}%`);
       idx++;
     }
 
-    if (managerId) {
+    // 🔐 Role-based scoping
+    if (user?.role === "EVENT_MANAGER") {
+      // ✅ Force only their events
       whereClauses.push(`e.manager_id = $${idx}`);
-      params.push(managerId);
+      params.push(user.id);
       idx++;
+    } else if (managerId) {
+      // ✅ Allow manual filter only for Super Admin
+      if (user?.role === "SUPER_ADMIN") {
+        whereClauses.push(`e.manager_id = $${idx}`);
+        params.push(managerId);
+        idx++;
+      }
     }
 
+    // 📅 Status filter
     if (status === "upcoming") {
       whereClauses.push(`e.start_date > NOW()`);
     } else if (status === "ongoing") {
@@ -87,7 +99,7 @@ export const listEvents = async (req: Request, res: Response, next: NextFunction
       GROUP BY e.id
       ORDER BY e.start_date ASC
       LIMIT $${idx} OFFSET $${idx + 1}
-    `,
+      `,
       [...params, Number(limit), offset]
     );
 
@@ -106,6 +118,7 @@ export const listEvents = async (req: Request, res: Response, next: NextFunction
     next(error);
   }
 };
+
 
 /**
  * GET /events/:id
@@ -131,6 +144,9 @@ export const createEvent = async (
 ): Promise<Response | void> => {
   try {
     // Accept both camelCase and snake_case from frontend
+    if (req.user?.role !== "SUPER_ADMIN") {
+      return res.status(403).json({ success: false, message: "Forbidden: Super Admins only" });
+    }
     const {
       title,
       description,

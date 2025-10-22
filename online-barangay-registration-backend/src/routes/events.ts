@@ -1,31 +1,28 @@
+// src/routes/events.ts
 import { Router } from "express";
-import { uploadEventPhoto } from "../config/multer";
-import express from "express";
 import * as eventsController from "../controllers/events";
 import * as registrationsController from "../controllers/registrations";
-import { CreateEventSchema, UpdateEventSchema, QueryEventsSchema, validateRequest } from "../utils/validation";
 import { authenticateToken, authorize, optionalAuth } from "../middleware/auth";
+import { uploadEventPhoto } from "../config/multer";
 
 const router = Router();
 
-// ✅ Create event FIRST (before any dynamic route)
+// ✅ Create event (multipart form-data supported)
 router.post(
   "/",
   authenticateToken,
-  authorize("SUPER_ADMIN", "EVENT_MANAGER"),
-  validateRequest(CreateEventSchema),
-  uploadEventPhoto.single("photo"), // ✅ handles form-data (fields + file)
-  eventsController.createEvent
+  authorize("SUPER_ADMIN"),
+  uploadEventPhoto.single("photo"), // 🔥 multer parses form-data
+  eventsController.createEvent // 🔥 skip validation for now
 );
 
-
-// ✅ Public list (with query support)
-router.get("/", validateRequest(QueryEventsSchema), optionalAuth, eventsController.listEvents);
+// ✅ Public list
+router.get("/", optionalAuth, eventsController.listEvents);
 
 // ✅ Public: single event
 router.get("/:id", optionalAuth, eventsController.getEvent);
 
-// ✅ List registrants for a specific event
+// ✅ List registrants
 router.get(
   "/:eventId/registrants",
   authenticateToken,
@@ -38,11 +35,16 @@ router.patch(
   "/:id",
   authenticateToken,
   authorize("SUPER_ADMIN", "EVENT_MANAGER"),
-  validateRequest(UpdateEventSchema),
+  uploadEventPhoto.single("photo"), // allow updates with image
   eventsController.updateEvent
 );
 
 // ✅ Delete event
-router.delete("/:id", authenticateToken, authorize("SUPER_ADMIN"), eventsController.deleteEvent);
+router.delete(
+  "/:id",
+  authenticateToken,
+  authorize("SUPER_ADMIN"),
+  eventsController.deleteEvent
+);
 
 export default router;

@@ -69,37 +69,37 @@ const AdminDashboard: React.FC = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const refresh = () => setRefreshKey((k) => k + 1);
 
-  // ✅ Load Events
-  useEffect(() => {
-    const fetchEvents = async () => {
-      if (!token) return;
-      setLoading(true);
-      try {
-        const res = await apiFetch(
-          role === "EVENT_MANAGER" && user?.id
-            ? `/events?managerId=${user.id}`
-            : "/events",
-          {},
-          token
-        );
-        const data: ShortEvent[] = (res.data || []).map((e: any) => ({
-          id: e.id,
-          title: e.title,
-          start_date: e.startDate || e.start_date,
-          end_date: e.endDate || e.end_date,
-          location: e.location,
-          registration_count: e.registrationCount || e.registration_count || 0,
-        }));
-        setEvents(data);
-        setStats((s) => ({ ...s, totalEvents: data.length }));
-      } catch (err) {
-        console.error("Error fetching events:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchEvents();
-  }, [role, token, user?.id, refreshKey]);
+  // ✅ Load Events (auto-scoped by backend)
+useEffect(() => {
+  if (!token) return;
+
+  const fetchEvents = async () => {
+    setLoading(true);
+    try {
+      // Backend now auto-scopes based on role
+      const res = await apiFetch("/events", {}, token);
+
+      const data: ShortEvent[] = (res.data || []).map((e: any) => ({
+        id: e.id,
+        title: e.title,
+        start_date: e.startDate || e.start_date,
+        end_date: e.endDate || e.end_date,
+        location: e.location,
+        registration_count: e.registrationCount || e.registration_count || 0,
+      }));
+
+      setEvents(data);
+      setStats((s) => ({ ...s, totalEvents: data.length }));
+    } catch (err) {
+      console.error("Error fetching events:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchEvents();
+}, [token, refreshKey]);
+
 
   // ✅ Load Categories and Managers
   useEffect(() => {
