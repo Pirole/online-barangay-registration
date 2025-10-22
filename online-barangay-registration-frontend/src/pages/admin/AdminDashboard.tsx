@@ -1,8 +1,7 @@
-// src/pages/admin/AdminDashboard.tsx
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
-import { useNavigate } from "react-router-dom";
 
 type Role = "SUPER_ADMIN" | "EVENT_MANAGER" | "STAFF";
 
@@ -32,10 +31,8 @@ interface EventFormData {
   startDate?: string;
   endDate?: string;
   capacity?: number;
-  ageMin?: number;
-  ageMax?: number;
-  managerId?: string;
   categoryId?: string;
+  managerId?: string;
   photo?: File | null;
 }
 
@@ -45,232 +42,185 @@ const AdminDashboard: React.FC = () => {
   const role = (user?.role || "").toUpperCase() as Role | string;
 
   const [events, setEvents] = useState<ShortEvent[]>([]);
-  const [loadingEvents, setLoadingEvents] = useState(false);
   const [registrants, setRegistrants] = useState<RegistrantRow[]>([]);
-  const [loadingRegs, setLoadingRegs] = useState(false);
-  const [selectedEventId, setSelectedEventId] = useState<string>("all");
+  const [categories, setCategories] = useState<any[]>([]);
+  const [managers, setManagers] = useState<any[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState("all");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({
     totalEvents: 0,
     totalRegistrants: 0,
     pendingApprovals: 0,
   });
-  const [error, setError] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  const [modalOpen, setModalOpen] = useState(false);
   const [formData, setFormData] = useState<EventFormData>({
     title: "",
     description: "",
     location: "",
     startDate: "",
     endDate: "",
-    managerId: "",
     categoryId: "",
+    managerId: "",
     photo: null,
   });
-  const [categories, setCategories] = useState<any[]>([]);
-  const [managers, setManagers] = useState<any[]>([]);
 
-  // 🔄 Load Events
+  const [refreshKey, setRefreshKey] = useState(0);
+  const refresh = () => setRefreshKey((k) => k + 1);
+
+  // ✅ Load Events
   useEffect(() => {
-    const load = async (): Promise<void> => {
-      if (!token) {
-        setError("No authentication token found.");
-        return;
-      }
+    const fetchEvents = async () => {
+      if (!token) return;
+      setLoading(true);
       try {
-        setLoadingEvents(true);
-        setError(null);
-
-        const eventsResp = await apiFetch(
+        const res = await apiFetch(
           role === "EVENT_MANAGER" && user?.id
             ? `/events?managerId=${user.id}`
             : "/events",
           {},
           token
         );
-
-        const evts: ShortEvent[] = (eventsResp?.data || []).map((e: any) => ({
+        const data: ShortEvent[] = (res.data || []).map((e: any) => ({
           id: e.id,
           title: e.title,
           start_date: e.startDate || e.start_date,
           end_date: e.endDate || e.end_date,
           location: e.location,
-          registration_count:
-            e.registrationCount || e.registration_count || 0,
+          registration_count: e.registrationCount || e.registration_count || 0,
         }));
-
-        setEvents(evts);
-        setStats((s) => ({ ...s, totalEvents: evts.length }));
-      } catch (error: any) {
-        console.error("Failed loading events", error);
-        setError(error.message || "Failed to load events");
+        setEvents(data);
+        setStats((s) => ({ ...s, totalEvents: data.length }));
+      } catch (err) {
+        console.error("Error fetching events:", err);
       } finally {
-        setLoadingEvents(false);
+        setLoading(false);
       }
     };
-
-    load();
+    fetchEvents();
   }, [role, token, user?.id, refreshKey]);
 
-  // 🔄 Load categories and event managers (for modal)
+  // ✅ Load Categories and Managers
   useEffect(() => {
     const loadMeta = async () => {
       if (!token) return;
       try {
-        const catRes = await apiFetch("/categories", {}, token);
-        const mgrRes = await apiFetch("/event-managers", {}, token);
+        const [catRes, mgrRes] = await Promise.all([
+          apiFetch("/categories", {}, token),
+          apiFetch("/event-managers", {}, token),
+        ]);
         setCategories(catRes.data || []);
         setManagers(mgrRes.data || []);
       } catch (err) {
-        console.warn("Failed to load categories/managers");
+        console.warn("Failed loading categories or managers:", err);
       }
     };
     loadMeta();
   }, [token]);
 
-  // 🔄 Load Registrants (Pending)
+  // ✅ Load Registrants (Pending)
   useEffect(() => {
-    const loadRegs = async (): Promise<void> => {
+    const loadRegs = async () => {
       if (!token) return;
       try {
-        setLoadingRegs(true);
-        setError(null);
-
-        const arr: any[] = [];
-
-        for (const e of events) {
+        const allRegs: any[] = [];
+        for (const evt of events) {
           try {
-            const r = await apiFetch(
-              `/events/${e.id}/registrants?status=pending`,
+            const res = await apiFetch(
+              `/events/${evt.id}/registrants?status=pending`,
               {},
               token
             );
-            (r.data || []).forEach((reg: any) =>
-              arr.push({ ...reg, eventTitle: e.title, eventId: e.id })
+            (res.data || []).forEach((r: any) =>
+              allRegs.push({ ...r, eventId: evt.id, eventTitle: evt.title })
             );
           } catch {
-            console.warn(`Failed to fetch registrants for event ${e.title}`);
+            console.warn(`Failed to fetch registrants for ${evt.title}`);
           }
         }
 
-        const regs: RegistrantRow[] = (arr || []).map((r: any) => ({
+        const formatted = allRegs.map((r: any) => ({
           id: r.id,
           eventId: r.eventId,
           eventTitle: r.eventTitle,
           profile: r.profile ?? {
-            firstName:
-              (r.customValues &&
-                typeof r.customValues === "object" &&
-                (r.customValues as any).firstName) ||
-              "",
-            lastName:
-              (r.customValues &&
-                typeof r.customValues === "object" &&
-                (r.customValues as any).lastName) ||
-              "",
-            barangay:
-              (r.customValues &&
-                typeof r.customValues === "object" &&
-                (r.customValues as any).barangay) ||
-              "",
+            firstName: r.customValues?.firstName || "",
+            lastName: r.customValues?.lastName || "",
+            barangay: r.customValues?.barangay || "",
           },
-          customValues: r.customValues ?? {},
           status: (r.status || "pending").toLowerCase(),
           created_at: r.createdAt || r.created_at,
         }));
 
-        setRegistrants(regs);
-        setStats((s) => ({
-          ...s,
-          totalRegistrants: regs.length,
-          pendingApprovals: regs.filter(
-            (reg) => reg.status === "pending"
+        setRegistrants(formatted);
+        setStats({
+          totalEvents: events.length,
+          totalRegistrants: formatted.length,
+          pendingApprovals: formatted.filter(
+            (r) => r.status === "pending"
           ).length,
-        }));
-      } catch (error: any) {
-        console.error("Failed loading registrants", error);
-        setError(error.message || "Failed to load registrants");
-      } finally {
-        setLoadingRegs(false);
+        });
+      } catch (err) {
+        console.error("Failed loading registrants:", err);
       }
     };
-
-    loadRegs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (events.length > 0) loadRegs();
   }, [events, token, refreshKey]);
 
-  const refresh = (): void => setRefreshKey((k) => k + 1);
-
-  const approveRegistrant = async (id: string): Promise<void> => {
-    if (!confirm("Approve this registrant?")) return;
+  // ✅ Approve / Reject
+  const updateRegistrant = async (id: string, status: string) => {
+    if (!confirm(`Are you sure to ${status} this registrant?`)) return;
     try {
       await apiFetch(
         `/registrations/${id}/approval`,
         {
           method: "POST",
-          body: JSON.stringify({ status: "approved" }),
+          body: JSON.stringify({ status }),
         },
         token
       );
       refresh();
-    } catch (error: any) {
-      alert(error.message || "Approve failed");
+    } catch (err: any) {
+      alert(err.message || `Failed to ${status}`);
     }
   };
 
-  const rejectRegistrant = async (id: string): Promise<void> => {
-    if (!confirm("Reject this registrant?")) return;
-    try {
-      await apiFetch(
-        `/registrations/${id}/approval`,
-        {
-          method: "POST",
-          body: JSON.stringify({ status: "rejected" }),
-        },
-        token
-      );
-      refresh();
-    } catch (error: any) {
-      alert(error.message || "Reject failed");
-    }
-  };
-
-  const handleLogout = (): void => {
-    if (logout) logout();
-    else {
-      localStorage.clear();
-      sessionStorage.clear();
-    }
+  // ✅ Logout
+  const handleLogout = () => {
+    logout?.();
+    localStorage.clear();
+    sessionStorage.clear();
     navigate("/login");
   };
 
-  const handleCreateEvent = async (): Promise<void> => {
-    const data = new FormData();
-    Object.entries(formData).forEach(([key, value]) => {
-      if (value !== null && value !== undefined && value !== "")
-        data.append(key, value as any);
-    });
+  // ✅ Create Event
+  const handleCreateEvent = async () => {
+  try {
+    // convert datetime-local → ISO 8601 UTC
+    const startISO = new Date(formData.startDate || "").toISOString();
+    const endISO = new Date(formData.endDate || "").toISOString();
 
-    try {
-      await apiFetch("/events", { method: "POST", body: data }, token);
-      alert("Event created successfully!");
-      setModalOpen(false);
-      setFormData({
-        title: "",
-        description: "",
-        location: "",
-        startDate: "",
-        endDate: "",
-        managerId: "",
-        categoryId: "",
-        photo: null,
-      });
-      refresh();
-    } catch (error: any) {
-      alert(error.message || "Failed to create event");
-    }
-  };
+    const data = new FormData();
+    data.append("title", formData.title);
+    data.append("description", formData.description || "");
+    data.append("location", formData.location || "");
+    data.append("startDate", startISO);
+    data.append("endDate", endISO);
+    if (formData.capacity) data.append("capacity", String(formData.capacity));
+    if (formData.categoryId) data.append("categoryId", formData.categoryId);
+    if (formData.managerId) data.append("managerId", formData.managerId);
+    if (formData.photo) data.append("photo", formData.photo);
+
+    await apiFetch("/events", { method: "POST", body: data }, token);
+
+    alert("✅ Event created successfully!");
+    setModalOpen(false);
+    refresh();
+  } catch (error: any) {
+    console.error("Create event failed:", error);
+    alert(error.message || "❌ Failed to create event");
+  }
+};
+
 
   const pending = useMemo(
     () => registrants.filter((r) => r.status === "pending"),
@@ -282,8 +232,10 @@ const AdminDashboard: React.FC = () => {
       ? pending
       : pending.filter((r) => r.eventId === selectedEventId);
 
+  // ✅ UI
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
@@ -321,14 +273,15 @@ const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Create Event Modal */}
-      {modalOpen && (
+      {/* Modal: Create Event */}
+      {/* ✅ Create Event Modal */}
+{modalOpen && (
   <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div className="bg-white p-6 rounded shadow-lg w-full max-w-2xl overflow-y-auto max-h-[90vh]">
-      <h2 className="text-xl font-semibold mb-4">Create New Event</h2>
+      <h2 className="text-2xl font-semibold mb-6 text-center">Create New Event</h2>
 
-      <div className="space-y-4">
-        {/* Title */}
+      <div className="space-y-5">
+        {/* ───── Title & Description ───── */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Event Title <span className="text-red-500">*</span>
@@ -336,15 +289,13 @@ const AdminDashboard: React.FC = () => {
           <input
             type="text"
             value={formData.title}
-            onChange={(e) =>
-              setFormData({ ...formData, title: e.target.value })
-            }
+            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             className="w-full border rounded p-2"
-            placeholder="e.g. Barangay Tree-Planting Day"
+            placeholder="e.g. Barangay Clean-Up Drive"
+            required
           />
         </div>
 
-        {/* Description */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Description
@@ -355,11 +306,12 @@ const AdminDashboard: React.FC = () => {
               setFormData({ ...formData, description: e.target.value })
             }
             className="w-full border rounded p-2"
-            placeholder="Short description of the event"
+            rows={3}
+            placeholder="Short event description (optional)"
           />
         </div>
 
-        {/* Location */}
+        {/* ───── Location ───── */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Location <span className="text-red-500">*</span>
@@ -367,16 +319,14 @@ const AdminDashboard: React.FC = () => {
           <input
             type="text"
             value={formData.location}
-            onChange={(e) =>
-              setFormData({ ...formData, location: e.target.value })
-            }
+            onChange={(e) => setFormData({ ...formData, location: e.target.value })}
             className="w-full border rounded p-2"
-            placeholder="Barangay Hall, Covered Court, etc."
+            placeholder="e.g. Barangay Hall, Covered Court, etc."
           />
         </div>
 
-        {/* Dates */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* ───── Dates ───── */}
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Start Date / Time <span className="text-red-500">*</span>
@@ -405,15 +355,15 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Capacity + Photo */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* ───── Capacity + Photo ───── */}
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Capacity (optional)
             </label>
             <input
               type="number"
-              min="0"
+              min="1"
               value={formData.capacity || ""}
               onChange={(e) =>
                 setFormData({
@@ -422,12 +372,12 @@ const AdminDashboard: React.FC = () => {
                 })
               }
               className="w-full border rounded p-2"
-              placeholder="e.g. 200"
+              placeholder="e.g. 100"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Event Photo (optional)
+              Upload Photo (optional)
             </label>
             <input
               type="file"
@@ -443,8 +393,8 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Category + Manager */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* ───── Category & Manager ───── */}
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Category <span className="text-red-500">*</span>
@@ -464,6 +414,7 @@ const AdminDashboard: React.FC = () => {
               ))}
             </select>
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Assign Manager <span className="text-red-500">*</span>
@@ -477,18 +428,18 @@ const AdminDashboard: React.FC = () => {
             >
               <option value="">Select Event Manager</option>
               {managers.map((m) => (
-  <option key={m.id} value={m.id}>
-    {m.profile?.firstName || ""} {m.profile?.lastName || ""} 
-    {(!m.profile?.firstName && !m.profile?.lastName) ? `(${m.firstName})` : ""}
-  </option>
-))}
-
+                <option key={m.id} value={m.id}>
+                  {m.profile?.firstName || m.firstName || ""}{" "}
+                  {m.profile?.lastName || m.lastName || ""}
+                </option>
+              ))}
             </select>
           </div>
         </div>
       </div>
 
-      <div className="flex justify-end mt-5 gap-2">
+      {/* ───── Buttons ───── */}
+      <div className="flex justify-end mt-6 gap-3">
         <button
           onClick={() => setModalOpen(false)}
           className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
@@ -496,7 +447,7 @@ const AdminDashboard: React.FC = () => {
           Cancel
         </button>
         <button
-          onClick={handleCreateEvent}
+          onClick={() => handleCreateEvent()}
           className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
           Save Event
@@ -506,7 +457,8 @@ const AdminDashboard: React.FC = () => {
   </div>
 )}
 
-      {/* Summary cards */}
+
+      {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="p-4 bg-white rounded shadow">
           <div className="text-sm text-gray-500">Total Events</div>
@@ -522,15 +474,9 @@ const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Events table */}
+      {/* Events Table */}
       <section className="mb-6 bg-white p-4 rounded shadow">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-medium">Events</h2>
-          <div className="text-sm text-gray-500">
-            {loadingEvents ? "Loading..." : `${events.length} events`}
-          </div>
-        </div>
-
+        <h2 className="text-lg font-medium mb-3">Events</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -547,27 +493,19 @@ const AdminDashboard: React.FC = () => {
                 <tr key={evt.id} className="border-t">
                   <td className="py-2">{evt.title}</td>
                   <td>{evt.location}</td>
-                  <td>
-                    {evt.start_date
-                      ? new Date(evt.start_date).toLocaleString()
-                      : "-"}
-                  </td>
+                  <td>{evt.start_date ? new Date(evt.start_date).toLocaleString() : "-"}</td>
                   <td>{evt.registration_count ?? 0}</td>
                   <td className="text-right">
-                    <div className="inline-flex gap-2">
-                      <button
-                        onClick={() =>
-                          navigate(`/admin/events/${evt.id}/registrants`)
-                        }
-                        className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
-                      >
-                        View Registrants
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => navigate(`/admin/events/${evt.id}/registrants`)}
+                      className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                    >
+                      View Registrants
+                    </button>
                   </td>
                 </tr>
               ))}
-              {events.length === 0 && !loadingEvents && (
+              {events.length === 0 && (
                 <tr>
                   <td colSpan={5} className="p-4 text-gray-500">
                     No events found.
@@ -579,26 +517,22 @@ const AdminDashboard: React.FC = () => {
         </div>
       </section>
 
-      {/* Pending registrants table */}
+      {/* Pending Registrants */}
       <section className="bg-white p-4 rounded shadow">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-medium">Pending Registrants</h2>
-
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600">Filter by Event:</label>
-            <select
-              value={selectedEventId}
-              onChange={(e) => setSelectedEventId(e.target.value)}
-              className="border rounded px-2 py-1 text-sm"
-            >
-              <option value="all">All Events</option>
-              {events.map((evt) => (
-                <option key={evt.id} value={evt.id}>
-                  {evt.title}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={selectedEventId}
+            onChange={(e) => setSelectedEventId(e.target.value)}
+            className="border rounded px-2 py-1 text-sm"
+          >
+            <option value="all">All Events</option>
+            {events.map((evt) => (
+              <option key={evt.id} value={evt.id}>
+                {evt.title}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="overflow-x-auto">
@@ -614,21 +548,14 @@ const AdminDashboard: React.FC = () => {
             </thead>
             <tbody>
               {filteredPending.map((row) => {
-                const name =
-                  `${row.profile?.firstName || ""} ${
-                    row.profile?.lastName || ""
-                  }`.trim() ||
-                  row.customValues?.firstName ||
-                  "Unnamed";
+                const name = `${row.profile?.firstName || ""} ${
+                  row.profile?.lastName || ""
+                }`.trim() || "Unnamed";
                 return (
                   <tr className="border-t" key={row.id}>
                     <td className="py-2">{name}</td>
-                    <td>{row.eventTitle || row.eventId}</td>
-                    <td>
-                      {row.profile?.barangay ||
-                        row.customValues?.barangay ||
-                        "-"}
-                    </td>
+                    <td>{row.eventTitle}</td>
+                    <td>{row.profile?.barangay || "-"}</td>
                     <td>
                       {row.created_at
                         ? new Date(row.created_at).toLocaleString()
@@ -637,13 +564,13 @@ const AdminDashboard: React.FC = () => {
                     <td className="text-right">
                       <div className="inline-flex gap-2">
                         <button
-                          onClick={() => approveRegistrant(row.id)}
+                          onClick={() => updateRegistrant(row.id, "approved")}
                           className="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700"
                         >
                           Approve
                         </button>
                         <button
-                          onClick={() => rejectRegistrant(row.id)}
+                          onClick={() => updateRegistrant(row.id, "rejected")}
                           className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
                         >
                           Reject
@@ -653,10 +580,10 @@ const AdminDashboard: React.FC = () => {
                   </tr>
                 );
               })}
-              {filteredPending.length === 0 && !loadingRegs && (
+              {filteredPending.length === 0 && (
                 <tr>
                   <td colSpan={5} className="p-4 text-gray-500">
-                    No pending registrants found for this event.
+                    No pending registrants.
                   </td>
                 </tr>
               )}
