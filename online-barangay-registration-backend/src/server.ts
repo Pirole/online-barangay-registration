@@ -72,6 +72,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(requestLogger);
 
+
 // ================================================
 // STATIC FILES — Serve uploads for Photos & QR Codes
 // ================================================
@@ -80,6 +81,7 @@ app.use(requestLogger);
  * ✅ Serve registrant photos (stored in src/uploads/photos)
  * Example URL: http://localhost:5000/uploads/photos/photo-123.jpg
  */
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 app.use(
   "/uploads/photos",
   express.static(path.join(__dirname, "uploads", "photos"), {

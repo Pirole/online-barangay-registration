@@ -8,11 +8,17 @@ import { logger } from "../utils/logger";
 import prisma from "../config/prisma"; // ✅ for audit logging only
 
 /**
- * Helper: Save uploaded event photo
+ * Helper: Save uploaded event photo (disk-safe version)
  */
 const saveEventPhoto = (file?: Express.Multer.File): string | null => {
   if (!file) return null;
 
+  // ✅ If multer is using diskStorage, the file is already saved on disk
+  if (file.path && fs.existsSync(file.path)) {
+    return `/uploads/events/${path.basename(file.path)}`;
+  }
+
+  // ✅ If using memoryStorage, fallback to manual save
   const uploadsDir = path.join(process.cwd(), "uploads", "events");
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
@@ -20,9 +26,10 @@ const saveEventPhoto = (file?: Express.Multer.File): string | null => {
 
   const fileName = `${Date.now()}_${file.originalname.replace(/\s+/g, "_")}`;
   const filePath = path.join(uploadsDir, fileName);
-  fs.writeFileSync(filePath, file.buffer);
+  fs.writeFileSync(filePath, file.buffer); // works only if buffer exists
   return `/uploads/events/${fileName}`;
 };
+
 
 /**
  * GET /events
