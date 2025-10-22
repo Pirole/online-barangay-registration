@@ -35,16 +35,20 @@ const API_VERSION = process.env.API_VERSION || "v1";
 app.use(
   helmet({
     crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: false, // ✅ Add this line
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         scriptSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:", "https:", "http://localhost:5000"],
+        imgSrc: ["'self'", "data:", "https:", "http://localhost:5000", "blob:"],
+        connectSrc: ["'self'", "http://localhost:5000", "http://localhost:5173"],
       },
     },
   })
 );
+
+
 
 app.use(
   cors({
@@ -98,6 +102,14 @@ app.use(
 app.use(
   "/uploads/qr",
   express.static(path.join(__dirname, "..", "uploads", "qr"), {
+    setHeaders: (res) => {
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    },
+  })
+);
+app.use(
+  "/uploads/events",
+  express.static(path.join(__dirname, "..", "uploads", "events"), {
     setHeaders: (res) => {
       res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
     },

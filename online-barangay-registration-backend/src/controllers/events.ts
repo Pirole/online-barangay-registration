@@ -13,22 +13,30 @@ import prisma from "../config/prisma"; // ✅ for audit logging only
 const saveEventPhoto = (file?: Express.Multer.File): string | null => {
   if (!file) return null;
 
-  // ✅ If multer is using diskStorage, the file is already saved on disk
-  if (file.path && fs.existsSync(file.path)) {
-    return `/uploads/events/${path.basename(file.path)}`;
-  }
-
-  // ✅ If using memoryStorage, fallback to manual save
   const uploadsDir = path.join(process.cwd(), "uploads", "events");
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
 
-  const fileName = `${Date.now()}_${file.originalname.replace(/\s+/g, "_")}`;
-  const filePath = path.join(uploadsDir, fileName);
-  fs.writeFileSync(filePath, file.buffer); // works only if buffer exists
-  return `/uploads/events/${fileName}`;
+  // ✅ If multer already saved the file, just move or rename it
+  if (file.path && !file.buffer) {
+    const fileName = `${Date.now()}_${file.originalname.replace(/\s+/g, "_")}`;
+    const destPath = path.join(uploadsDir, fileName);
+    fs.renameSync(file.path, destPath);
+    return `/uploads/events/${fileName}`;
+  }
+
+  // ✅ Otherwise, write from buffer (for memoryStorage)
+  if (file.buffer) {
+    const fileName = `${Date.now()}_${file.originalname.replace(/\s+/g, "_")}`;
+    const destPath = path.join(uploadsDir, fileName);
+    fs.writeFileSync(destPath, file.buffer);
+    return `/uploads/events/${fileName}`;
+  }
+
+  return null;
 };
+
 
 
 /**

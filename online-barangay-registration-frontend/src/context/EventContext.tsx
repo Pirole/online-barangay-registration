@@ -41,6 +41,7 @@ export interface BackendEvent {
   created_at: string;
   updated_at: string;
   registration_count?: number;
+  photo_path?: string;
 }
 
 export interface Registrant {
