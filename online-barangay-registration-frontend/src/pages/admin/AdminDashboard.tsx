@@ -31,6 +31,8 @@ interface EventFormData {
   startDate?: string;
   endDate?: string;
   capacity?: number;
+  ageMin?: number;
+  ageMax?: number;
   categoryId?: string;
   managerId?: string;
   photo?: File | null;
@@ -193,33 +195,50 @@ const AdminDashboard: React.FC = () => {
   };
 
   // ✅ Create Event
-  const handleCreateEvent = async () => {
+  const handleCreateEvent = async (): Promise<void> => {
   try {
-    // convert datetime-local → ISO 8601 UTC
-    const startISO = new Date(formData.startDate || "").toISOString();
-    const endISO = new Date(formData.endDate || "").toISOString();
+    console.log("🧾 Raw formData before send:", formData);
+
+    // Convert datetime-local to ISO with timezone
+    const startISO = formData.startDate
+      ? new Date(formData.startDate).toISOString()
+      : "";
+    const endISO = formData.endDate
+      ? new Date(formData.endDate).toISOString()
+      : "";
 
     const data = new FormData();
-    data.append("title", formData.title);
+
+    // ✅ Must match your backend exactly
+    data.append("title", formData.title || "");
     data.append("description", formData.description || "");
     data.append("location", formData.location || "");
     data.append("startDate", startISO);
     data.append("endDate", endISO);
     if (formData.capacity) data.append("capacity", String(formData.capacity));
+    if (formData.ageMin) data.append("ageMin", String(formData.ageMin));
+    if (formData.ageMax) data.append("ageMax", String(formData.ageMax));
     if (formData.categoryId) data.append("categoryId", formData.categoryId);
     if (formData.managerId) data.append("managerId", formData.managerId);
     if (formData.photo) data.append("photo", formData.photo);
 
-    await apiFetch("/events", { method: "POST", body: data }, token);
+    // 🧠 Debug print: see what’s being sent
+    for (const [key, value] of data.entries()) {
+      console.log("➡️ Sending", key, "=", value);
+    }
+
+    const response = await apiFetch("/events", { method: "POST", body: data }, token);
+    console.log("✅ Response:", response);
 
     alert("✅ Event created successfully!");
     setModalOpen(false);
     refresh();
   } catch (error: any) {
-    console.error("Create event failed:", error);
-    alert(error.message || "❌ Failed to create event");
+    console.error("❌ Create event failed:", error);
+    alert(error.message || "Failed to create event");
   }
 };
+
 
 
   const pending = useMemo(

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { uploadEventPhoto } from "../config/multer";
 import express from "express";
 import * as eventsController from "../controllers/events";
 import * as registrationsController from "../controllers/registrations";
@@ -12,10 +13,11 @@ router.post(
   "/",
   authenticateToken,
   authorize("SUPER_ADMIN", "EVENT_MANAGER"),
-  express.json(),
   validateRequest(CreateEventSchema),
+  uploadEventPhoto.single("photo"), // ✅ handles form-data (fields + file)
   eventsController.createEvent
 );
+
 
 // ✅ Public list (with query support)
 router.get("/", validateRequest(QueryEventsSchema), optionalAuth, eventsController.listEvents);
