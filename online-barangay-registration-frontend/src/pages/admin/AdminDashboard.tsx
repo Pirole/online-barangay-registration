@@ -29,11 +29,11 @@ interface EventFormData {
   title: string;
   description?: string;
   location?: string;
-  start_date?: string;
-  end_date?: string;
+  startDate?: string;
+  endDate?: string;
   capacity?: number;
-  age_min?: number;
-  age_max?: number;
+  ageMin?: number;
+  ageMax?: number;
   managerId?: string;
   categoryId?: string;
   photo?: File | null;
@@ -62,8 +62,8 @@ const AdminDashboard: React.FC = () => {
     title: "",
     description: "",
     location: "",
-    start_date: "",
-    end_date: "",
+    startDate: "",
+    endDate: "",
     managerId: "",
     categoryId: "",
     photo: null,
@@ -260,8 +260,8 @@ const AdminDashboard: React.FC = () => {
         title: "",
         description: "",
         location: "",
-        start_date: "",
-        end_date: "",
+        startDate: "",
+        endDate: "",
         managerId: "",
         categoryId: "",
         photo: null,
@@ -383,9 +383,9 @@ const AdminDashboard: React.FC = () => {
             </label>
             <input
               type="datetime-local"
-              value={formData.start_date || ""}
+              value={formData.startDate || ""}
               onChange={(e) =>
-                setFormData({ ...formData, start_date: e.target.value })
+                setFormData({ ...formData, startDate: e.target.value })
               }
               className="w-full border rounded p-2"
             />
@@ -396,9 +396,9 @@ const AdminDashboard: React.FC = () => {
             </label>
             <input
               type="datetime-local"
-              value={formData.end_date || ""}
+              value={formData.endDate || ""}
               onChange={(e) =>
-                setFormData({ ...formData, end_date: e.target.value })
+                setFormData({ ...formData, endDate: e.target.value })
               }
               className="w-full border rounded p-2"
             />
