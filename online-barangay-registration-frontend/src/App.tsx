@@ -20,6 +20,7 @@ import EventManagers from "./pages/admin/EventManagers";
 // Layouts & Guards
 import AdminLayout from "./layouts/AdminLayout";
 import AuthGuard from "./components/layout/AuthGuard";
+import Statistics from "./pages/admin/Statistics";
 
 function App() {
   return (
@@ -37,13 +38,18 @@ function App() {
 
               {/* 🔒 Protected Admin Routes (Layout Wrapper) */}
               <Route
-  path="/admin"
-  element={
-    <AuthGuard roles={['SUPER_ADMIN', 'EVENT_MANAGER', 'STAFF']}>
-      <AdminLayout />
-    </AuthGuard>
-  }
->
+                path="/admin"
+                element={
+                  <AuthGuard roles={['SUPER_ADMIN', 'EVENT_MANAGER', 'STAFF']}>
+                    <AdminLayout />
+                    
+                  </AuthGuard>
+                }
+                
+              >
+              
+              
+
                 {/* 🏠 Default dashboard page (/admin) */}
                 <Route index element={<AdminDashboard />} />
 
@@ -56,7 +62,7 @@ function App() {
                     </AuthGuard>
                   }
                 />
-
+                <Route path="statistics" element={<Statistics />} />
                 {/* 👥 User Management (Super Admin only) */}
                 <Route
                   path="users"

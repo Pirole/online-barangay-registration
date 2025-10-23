@@ -225,9 +225,7 @@ const AdminDashboard: React.FC = () => {
      
         <div>
           <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
-          <p className="text-sm text-gray-600">
-            Logged in as <strong>{user?.email}</strong> ({role})
-          </p>
+          <br></br>
         </div>
         
         <div className="flex items-center gap-2">
@@ -246,6 +244,7 @@ const AdminDashboard: React.FC = () => {
             Logout
           </button>
         </div>
+        <br></br>
       
 
       {/* Events Grid */}
