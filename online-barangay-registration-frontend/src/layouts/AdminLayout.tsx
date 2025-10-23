@@ -38,7 +38,7 @@ const AdminLayout: React.FC = () => {
     { label: "Events", icon: FiCalendar, path: "/admin/events" },
     { label: "Event Managers", icon: FiUsers, path: "/admin/event-managers" },
     { label: "Statistics", icon: FiBarChart2, path: "/admin/statistics" },
-    { label: "Settings", icon: FiSettings, path: "/admin/settings" },
+ 
   ];
 
   const isSuperAdmin = role === "SUPER_ADMIN";
