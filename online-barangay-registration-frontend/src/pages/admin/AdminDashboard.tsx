@@ -12,6 +12,7 @@ import {
   CalendarDaysIcon,
   PlusIcon,
 } from "@heroicons/react/24/solid";
+import AdminLayout from "../../layouts/AdminLayout";
 
 /* ============================
    Type Definitions
@@ -221,13 +222,14 @@ const AdminDashboard: React.FC = () => {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+     
         <div>
           <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
           <p className="text-sm text-gray-600">
             Logged in as <strong>{user?.email}</strong> ({role})
           </p>
         </div>
+        
         <div className="flex items-center gap-2">
           <button onClick={refresh} className="px-3 py-1 bg-blue-600 text-white rounded">
             Refresh
@@ -244,7 +246,7 @@ const AdminDashboard: React.FC = () => {
             Logout
           </button>
         </div>
-      </div>
+      
 
       {/* Events Grid */}
       {loading ? (

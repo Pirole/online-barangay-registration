@@ -14,10 +14,10 @@ const Footer: React.FC<FooterProps> = ({ className = '' }) => {
           <div>
             <div className="flex items-center space-x-3 mb-4">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-600 via-red-500 to-yellow-500 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-sm">604</span>
+                <span className="text-white font-bold text-sm">Brgy</span>
               </div>
               <div>
-                <h3 className="text-lg font-bold">Barangay 604</h3>
+                <h3 className="text-lg font-bold">Barangay</h3>
                 <p className="text-gray-300 text-sm">Online Registration System</p>
               </div>
             </div>
@@ -29,7 +29,7 @@ const Footer: React.FC<FooterProps> = ({ className = '' }) => {
               </div>
               <div className="flex items-center space-x-3">
                 <Mail className="w-5 h-5 text-blue-400" />
-                <span className="text-gray-300">info@barangay604.gov.ph</span>
+                <span className="text-gray-300">info@barangay.gov.ph</span>
               </div>
               <div className="flex items-start space-x-3">
                 <MapPin className="w-5 h-5 text-blue-400 mt-1" />
@@ -81,7 +81,7 @@ const Footer: React.FC<FooterProps> = ({ className = '' }) => {
 
         <div className="border-t border-gray-700 mt-8 pt-8 text-center">
           <p className="text-gray-400">
-            © 2025 Barangay 604 Online Registration System. All rights reserved.
+            © 2025 Barangay Online Registration System. All rights reserved.
           </p>
           <p className="text-gray-500 text-sm mt-2">
             Developed with ❤️ for the community
