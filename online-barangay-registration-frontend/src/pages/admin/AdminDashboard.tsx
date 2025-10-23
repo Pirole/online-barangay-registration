@@ -2,26 +2,24 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
+import toast from "react-hot-toast";
 
 type Role = "SUPER_ADMIN" | "EVENT_MANAGER" | "STAFF";
 
 interface ShortEvent {
   id: string;
   title: string;
+  description?: string;
+  location?: string;
   start_date?: string;
   end_date?: string;
-  location?: string;
+  capacity?: number;
+  age_min?: number;
+  age_max?: number;
+  category_id?: string;
+  manager_id?: string;
   registration_count?: number;
-}
-
-interface RegistrantRow {
-  id: string;
-  eventId?: string;
-  eventTitle?: string;
-  profile?: { firstName?: string; lastName?: string; barangay?: string };
-  customValues?: Record<string, any>;
-  status: string;
-  created_at?: string;
+  photo_path?: string;
 }
 
 interface EventFormData {
@@ -44,17 +42,15 @@ const AdminDashboard: React.FC = () => {
   const role = (user?.role || "").toUpperCase() as Role | string;
 
   const [events, setEvents] = useState<ShortEvent[]>([]);
-  const [registrants, setRegistrants] = useState<RegistrantRow[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [managers, setManagers] = useState<any[]>([]);
-  const [selectedEventId, setSelectedEventId] = useState("all");
-  const [modalOpen, setModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState({
-    totalEvents: 0,
-    totalRegistrants: 0,
-    pendingApprovals: 0,
-  });
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  const [selectedEvent, setSelectedEvent] = useState<ShortEvent | null>(null);
   const [formData, setFormData] = useState<EventFormData>({
     title: "",
     description: "",
@@ -65,46 +61,36 @@ const AdminDashboard: React.FC = () => {
     managerId: "",
     photo: null,
   });
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const [refreshKey, setRefreshKey] = useState(0);
   const refresh = () => setRefreshKey((k) => k + 1);
 
-  // ✅ Load Events (auto-scoped by backend)
-useEffect(() => {
-  if (!token) return;
-
-  const fetchEvents = async () => {
-    setLoading(true);
-    try {
-      // Backend now auto-scopes based on role
-      const res = await apiFetch("/events", {}, token);
-
-      const data: ShortEvent[] = (res.data || []).map((e: any) => ({
-        id: e.id,
-        title: e.title,
-        start_date: e.startDate || e.start_date,
-        end_date: e.endDate || e.end_date,
-        location: e.location,
-        registration_count: e.registrationCount || e.registration_count || 0,
-      }));
-
-      setEvents(data);
-      setStats((s) => ({ ...s, totalEvents: data.length }));
-    } catch (err) {
-      console.error("Error fetching events:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  fetchEvents();
-}, [token, refreshKey]);
-
-
-  // ✅ Load Categories and Managers
+  /* -------------------- FETCH DATA -------------------- */
   useEffect(() => {
+    if (!token) return;
+
+    const fetchEvents = async () => {
+      setLoading(true);
+      try {
+        const res = await apiFetch("/events", {}, token);
+        setEvents(res.data || []);
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to fetch events");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEvents();
+  }, [token, refreshKey]);
+
+  useEffect(() => {
+    if (!token) return;
+
     const loadMeta = async () => {
-      if (!token) return;
       try {
         const [catRes, mgrRes] = await Promise.all([
           apiFetch("/categories", {}, token),
@@ -113,145 +99,116 @@ useEffect(() => {
         setCategories(catRes.data || []);
         setManagers(mgrRes.data || []);
       } catch (err) {
-        console.warn("Failed loading categories or managers:", err);
+        console.warn("Failed to load meta:", err);
       }
     };
     loadMeta();
   }, [token]);
 
-  // ✅ Load Registrants (Pending)
-  useEffect(() => {
-    const loadRegs = async () => {
-      if (!token) return;
-      try {
-        const allRegs: any[] = [];
-        for (const evt of events) {
-          try {
-            const res = await apiFetch(
-              `/events/${evt.id}/registrants?status=pending`,
-              {},
-              token
-            );
-            (res.data || []).forEach((r: any) =>
-              allRegs.push({ ...r, eventId: evt.id, eventTitle: evt.title })
-            );
-          } catch {
-            console.warn(`Failed to fetch registrants for ${evt.title}`);
-          }
-        }
-
-        const formatted = allRegs.map((r: any) => ({
-          id: r.id,
-          eventId: r.eventId,
-          eventTitle: r.eventTitle,
-          profile: r.profile ?? {
-            firstName: r.customValues?.firstName || "",
-            lastName: r.customValues?.lastName || "",
-            barangay: r.customValues?.barangay || "",
-          },
-          status: (r.status || "pending").toLowerCase(),
-          created_at: r.createdAt || r.created_at,
-        }));
-
-        setRegistrants(formatted);
-        setStats({
-          totalEvents: events.length,
-          totalRegistrants: formatted.length,
-          pendingApprovals: formatted.filter(
-            (r) => r.status === "pending"
-          ).length,
-        });
-      } catch (err) {
-        console.error("Failed loading registrants:", err);
-      }
-    };
-    if (events.length > 0) loadRegs();
-  }, [events, token, refreshKey]);
-
-  // ✅ Approve / Reject
-  const updateRegistrant = async (id: string, status: string) => {
-    if (!confirm(`Are you sure to ${status} this registrant?`)) return;
-    try {
-      await apiFetch(
-        `/registrations/${id}/approval`,
-        {
-          method: "POST",
-          body: JSON.stringify({ status }),
-        },
-        token
-      );
-      refresh();
-    } catch (err: any) {
-      alert(err.message || `Failed to ${status}`);
-    }
-  };
-
-  // ✅ Logout
+  /* -------------------- HANDLERS -------------------- */
   const handleLogout = () => {
     logout?.();
     localStorage.clear();
-    sessionStorage.clear();
     navigate("/login");
   };
 
-  // ✅ Create Event
-  const handleCreateEvent = async (): Promise<void> => {
-  try {
-    console.log("🧾 Raw formData before send:", formData);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setFormData({ ...formData, photo: file });
+    setPhotoPreview(file ? URL.createObjectURL(file) : null);
+  };
 
-    // Convert datetime-local to ISO with timezone
-    const startISO = formData.startDate
-      ? new Date(formData.startDate).toISOString()
-      : "";
-    const endISO = formData.endDate
-      ? new Date(formData.endDate).toISOString()
-      : "";
+  /* ---------- CREATE EVENT ---------- */
+  const handleCreateEvent = async () => {
+    try {
+      setLoading(true);
+      const data = new FormData();
 
-    const data = new FormData();
+      data.append("title", formData.title || "");
+      data.append("description", formData.description || "");
+      data.append("location", formData.location || "");
+      data.append("startDate", formData.startDate || "");
+      data.append("endDate", formData.endDate || "");
+      if (formData.capacity) data.append("capacity", String(formData.capacity));
+      if (formData.ageMin) data.append("ageMin", String(formData.ageMin));
+      if (formData.ageMax) data.append("ageMax", String(formData.ageMax));
+      if (formData.categoryId) data.append("categoryId", formData.categoryId);
+      if (formData.managerId) data.append("managerId", formData.managerId);
+      if (formData.photo) data.append("photo", formData.photo);
 
-    // ✅ Must match your backend exactly
-    data.append("title", formData.title || "");
-    data.append("description", formData.description || "");
-    data.append("location", formData.location || "");
-    data.append("startDate", startISO);
-    data.append("endDate", endISO);
-    if (formData.capacity) data.append("capacity", String(formData.capacity));
-    if (formData.ageMin) data.append("ageMin", String(formData.ageMin));
-    if (formData.ageMax) data.append("ageMax", String(formData.ageMax));
-    if (formData.categoryId) data.append("categoryId", formData.categoryId);
-    if (formData.managerId) data.append("managerId", formData.managerId);
-    if (formData.photo) data.append("photo", formData.photo);
-
-    // 🧠 Debug print: see what’s being sent
-    for (const [key, value] of data.entries()) {
-      console.log("➡️ Sending", key, "=", value);
+      await apiFetch("/events", { method: "POST", body: data }, token);
+      toast.success("Event created successfully!");
+      setShowCreateModal(false);
+      refresh();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create event");
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const response = await apiFetch("/events", { method: "POST", body: data }, token);
-    console.log("✅ Response:", response);
+  /* ---------- UPDATE EVENT ---------- */
+  const openEditModal = (evt: ShortEvent) => {
+    setSelectedEvent(evt);
+    setFormData({
+      title: evt.title,
+      description: evt.description,
+      location: evt.location,
+      startDate: evt.start_date
+        ? new Date(evt.start_date).toISOString().slice(0, 16)
+        : "",
+      endDate: evt.end_date
+        ? new Date(evt.end_date).toISOString().slice(0, 16)
+        : "",
+      capacity: evt.capacity,
+      ageMin: evt.age_min,
+      ageMax: evt.age_max,
+      categoryId: evt.category_id,
+      managerId: evt.manager_id,
+      photo: null,
+    });
+    setPhotoPreview(evt.photo_path ? `http://localhost:5000${evt.photo_path}` : null);
+    setShowEditModal(true);
+  };
 
-    alert("✅ Event created successfully!");
-    setModalOpen(false);
-    refresh();
-  } catch (error: any) {
-    console.error("❌ Create event failed:", error);
-    alert(error.message || "Failed to create event");
-  }
-};
+  const handleUpdateEvent = async () => {
+    if (!selectedEvent) return;
+    try {
+      setLoading(true);
+      const data = new FormData();
+      Object.entries(formData).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) data.append(k, String(v));
+      });
+      if (formData.photo) data.append("photo", formData.photo);
 
+      await apiFetch(`/events/${selectedEvent.id}`, { method: "PUT", body: data }, token);
+      toast.success("Event updated successfully!");
+      setShowEditModal(false);
+      refresh();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update event");
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  /* ---------- DELETE EVENT ---------- */
+  const handleDeleteEvent = async () => {
+    if (!deleteTargetId) return;
+    try {
+      setLoading(true);
+      await apiFetch(`/events/${deleteTargetId}`, { method: "DELETE" }, token);
+      toast.success("Event deleted successfully!");
+      setShowDeleteModal(false);
+      refresh();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete event");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const pending = useMemo(
-    () => registrants.filter((r) => r.status === "pending"),
-    [registrants]
-  );
-
-  const filteredPending =
-    selectedEventId === "all"
-      ? pending
-      : pending.filter((r) => r.eventId === selectedEventId);
-
-  // ✅ UI
+  /* -------------------- JSX -------------------- */
   return (
     <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
@@ -259,130 +216,231 @@ useEffect(() => {
         <div>
           <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
           <p className="text-sm text-gray-600">
-            Logged in as: <strong>{user?.email || "Unknown"}</strong> ({role})
+            Logged in as: <strong>{user?.email}</strong> ({role})
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={refresh}
-            className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
-          >
+          <button onClick={refresh} className="px-3 py-1 bg-blue-600 text-white rounded">
             Refresh
           </button>
           {role === "SUPER_ADMIN" && (
             <button
-              onClick={() => setModalOpen(true)}
-              className="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700"
+              onClick={() => setShowCreateModal(true)}
+              className="px-3 py-1 bg-green-600 text-white rounded"
             >
               + Create Event
             </button>
           )}
-          <button
-            onClick={handleLogout}
-            className="px-3 py-1 rounded bg-gray-600 text-white hover:bg-gray-700"
-          >
+          <button onClick={handleLogout} className="px-3 py-1 bg-gray-600 text-white rounded">
             Logout
-          </button>
-          <button
-            onClick={() => navigate("/admin/event-managers")}
-            className="px-3 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-700"
-          >
-            Manage Event Managers
           </button>
         </div>
       </div>
 
-      {/* Modal: Create Event */}
-      {/* ✅ Create Event Modal */}
-{modalOpen && (
+      {/* Events Table */}
+      <div className="bg-white rounded shadow p-4">
+        <h2 className="text-lg font-medium mb-3">Events</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-gray-600">
+                <th>Title</th>
+                <th>Location</th>
+                <th>Start</th>
+                <th>Registrants</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.map((evt) => (
+                <tr key={evt.id} className="border-t">
+                  <td className="py-2">{evt.title}</td>
+                  <td>{evt.location}</td>
+                  <td>{evt.start_date ? new Date(evt.start_date).toLocaleString() : "-"}</td>
+                  <td>{evt.registration_count ?? 0}</td>
+                  <td className="flex gap-2 justify-end py-2">
+                    <button
+                      onClick={() => navigate(`/admin/events/${evt.id}/registrants`)}
+                      className="px-3 py-1 bg-blue-600 text-white rounded"
+                    >
+                      Registrants
+                    </button>
+                    {(role === "SUPER_ADMIN" ||
+                      (role === "EVENT_MANAGER" && evt.manager_id === user?.id)) && (
+                      <button
+                        onClick={() => openEditModal(evt)}
+                        className="px-3 py-1 bg-yellow-500 text-white rounded"
+                      >
+                        Edit
+                      </button>
+                    )}
+                    {role === "SUPER_ADMIN" && (
+                      <button
+                        onClick={() => {
+                          setDeleteTargetId(evt.id);
+                          setShowDeleteModal(true);
+                        }}
+                        className="px-3 py-1 bg-red-600 text-white rounded"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Create Modal */}
+      {showCreateModal && (
+        <Modal
+          title="Create Event"
+          formData={formData}
+          setFormData={setFormData}
+          photoPreview={photoPreview}
+          handleFileChange={handleFileChange}
+          onClose={() => setShowCreateModal(false)}
+          onSave={handleCreateEvent}
+          loading={loading}
+          categories={categories}
+          managers={managers}
+        />
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <Modal
+          title="Edit Event"
+          formData={formData}
+          setFormData={setFormData}
+          photoPreview={photoPreview}
+          handleFileChange={handleFileChange}
+          onClose={() => setShowEditModal(false)}
+          onSave={handleUpdateEvent}
+          loading={loading}
+          categories={categories}
+          managers={managers}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded shadow-md w-full max-w-sm">
+            <h3 className="text-lg font-semibold mb-4">Confirm Delete</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Are you sure you want to delete this event? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="px-3 py-1 bg-gray-300 rounded"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteEvent}
+                className="px-3 py-1 bg-red-600 text-white rounded"
+                disabled={loading}
+              >
+                {loading ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* -------------------- REUSABLE MODAL COMPONENT -------------------- */
+interface ModalProps {
+  title: string;
+  formData: EventFormData;
+  setFormData: React.Dispatch<React.SetStateAction<EventFormData>>;
+  photoPreview: string | null;
+  handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onClose: () => void;
+  onSave: () => void;
+  loading: boolean;
+  categories: any[];
+  managers: any[];
+}
+
+const Modal: React.FC<ModalProps> = ({
+  title,
+  formData,
+  setFormData,
+  photoPreview,
+  handleFileChange,
+  onClose,
+  onSave,
+  loading,
+  categories,
+  managers,
+}) => (
   <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div className="bg-white p-6 rounded shadow-lg w-full max-w-2xl overflow-y-auto max-h-[90vh]">
-      <h2 className="text-2xl font-semibold mb-6 text-center">Create New Event</h2>
+      <h2 className="text-2xl font-semibold mb-6 text-center">{title}</h2>
 
       <div className="space-y-5">
-        {/* ───── Title & Description ───── */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Event Title <span className="text-red-500">*</span>
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
           <input
             type="text"
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             className="w-full border rounded p-2"
-            placeholder="e.g. Barangay Clean-Up Drive"
-            required
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Description
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
           <textarea
             value={formData.description}
-            onChange={(e) =>
-              setFormData({ ...formData, description: e.target.value })
-            }
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             className="w-full border rounded p-2"
             rows={3}
-            placeholder="Short event description (optional)"
           />
         </div>
 
-        {/* ───── Location ───── */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Location <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={formData.location}
-            onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-            className="w-full border rounded p-2"
-            placeholder="e.g. Barangay Hall, Covered Court, etc."
-          />
-        </div>
-
-        {/* ───── Dates ───── */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Start Date / Time <span className="text-red-500">*</span>
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
             <input
               type="datetime-local"
               value={formData.startDate || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, startDate: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
               className="w-full border rounded p-2"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              End Date / Time <span className="text-red-500">*</span>
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">End Date *</label>
             <input
               type="datetime-local"
               value={formData.endDate || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, endDate: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
               className="w-full border rounded p-2"
             />
           </div>
         </div>
 
-        {/* ───── Capacity + Photo ───── */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Capacity (optional)
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Location *</label>
+            <input
+              type="text"
+              value={formData.location}
+              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+              className="w-full border rounded p-2"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
             <input
               type="number"
-              min="1"
               value={formData.capacity || ""}
               onChange={(e) =>
                 setFormData({
@@ -391,38 +449,26 @@ useEffect(() => {
                 })
               }
               className="w-full border rounded p-2"
-              placeholder="e.g. 100"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Upload Photo (optional)
-            </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  photo: e.target.files ? e.target.files[0] : null,
-                })
-              }
-              className="w-full border rounded p-2"
             />
           </div>
         </div>
 
-        {/* ───── Category & Manager ───── */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Photo</label>
+          {photoPreview && (
+            <div className="mb-2">
+              <img src={photoPreview} alt="Preview" className="h-32 object-cover rounded" />
+            </div>
+          )}
+          <input type="file" accept="image/*" onChange={handleFileChange} />
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Category <span className="text-red-500">*</span>
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
             <select
               value={formData.categoryId || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, categoryId: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
               className="border rounded p-2 w-full"
             >
               <option value="">Select Category</option>
@@ -435,21 +481,16 @@ useEffect(() => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Assign Manager <span className="text-red-500">*</span>
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Manager</label>
             <select
               value={formData.managerId || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, managerId: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, managerId: e.target.value })}
               className="border rounded p-2 w-full"
             >
-              <option value="">Select Event Manager</option>
+              <option value="">Select Manager</option>
               {managers.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.profile?.firstName || m.firstName || ""}{" "}
-                  {m.profile?.lastName || m.lastName || ""}
+                  {m.profile?.firstName || m.firstName} {m.profile?.lastName || m.lastName}
                 </option>
               ))}
             </select>
@@ -457,161 +498,20 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* ───── Buttons ───── */}
       <div className="flex justify-end mt-6 gap-3">
-        <button
-          onClick={() => setModalOpen(false)}
-          className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
-        >
+        <button onClick={onClose} className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
           Cancel
         </button>
         <button
-          onClick={() => handleCreateEvent()}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          onClick={onSave}
+          disabled={loading}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60"
         >
-          Save Event
+          {loading ? "Saving..." : "Save"}
         </button>
       </div>
     </div>
   </div>
-)}
-
-
-      {/* Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="p-4 bg-white rounded shadow">
-          <div className="text-sm text-gray-500">Total Events</div>
-          <div className="text-2xl font-bold">{stats.totalEvents}</div>
-        </div>
-        <div className="p-4 bg-white rounded shadow">
-          <div className="text-sm text-gray-500">Total Registrants</div>
-          <div className="text-2xl font-bold">{stats.totalRegistrants}</div>
-        </div>
-        <div className="p-4 bg-white rounded shadow">
-          <div className="text-sm text-gray-500">Pending Approvals</div>
-          <div className="text-2xl font-bold">{stats.pendingApprovals}</div>
-        </div>
-      </div>
-
-      {/* Events Table */}
-      <section className="mb-6 bg-white p-4 rounded shadow">
-        <h2 className="text-lg font-medium mb-3">Events</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-600">
-                <th className="py-2">Title</th>
-                <th>Location</th>
-                <th>Start</th>
-                <th>Registrants</th>
-                <th className="text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((evt) => (
-                <tr key={evt.id} className="border-t">
-                  <td className="py-2">{evt.title}</td>
-                  <td>{evt.location}</td>
-                  <td>{evt.start_date ? new Date(evt.start_date).toLocaleString() : "-"}</td>
-                  <td>{evt.registration_count ?? 0}</td>
-                  <td className="text-right">
-                    <button
-                      onClick={() => navigate(`/admin/events/${evt.id}/registrants`)}
-                      className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
-                    >
-                      View Registrants
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {events.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="p-4 text-gray-500">
-                    No events found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Pending Registrants */}
-      <section className="bg-white p-4 rounded shadow">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-medium">Pending Registrants</h2>
-          <select
-            value={selectedEventId}
-            onChange={(e) => setSelectedEventId(e.target.value)}
-            className="border rounded px-2 py-1 text-sm"
-          >
-            <option value="all">All Events</option>
-            {events.map((evt) => (
-              <option key={evt.id} value={evt.id}>
-                {evt.title}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-600">
-                <th className="py-2">Name</th>
-                <th>Event</th>
-                <th>Barangay</th>
-                <th>Submitted</th>
-                <th className="text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredPending.map((row) => {
-                const name = `${row.profile?.firstName || ""} ${
-                  row.profile?.lastName || ""
-                }`.trim() || "Unnamed";
-                return (
-                  <tr className="border-t" key={row.id}>
-                    <td className="py-2">{name}</td>
-                    <td>{row.eventTitle}</td>
-                    <td>{row.profile?.barangay || "-"}</td>
-                    <td>
-                      {row.created_at
-                        ? new Date(row.created_at).toLocaleString()
-                        : "-"}
-                    </td>
-                    <td className="text-right">
-                      <div className="inline-flex gap-2">
-                        <button
-                          onClick={() => updateRegistrant(row.id, "approved")}
-                          className="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => updateRegistrant(row.id, "rejected")}
-                          className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filteredPending.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="p-4 text-gray-500">
-                    No pending registrants.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
-  );
-};
+);
 
 export default AdminDashboard;
