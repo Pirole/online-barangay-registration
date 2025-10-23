@@ -1,9 +1,21 @@
-import React, { useEffect, useMemo, useState } from "react";
+// src/pages/admin/AdminDashboard.tsx
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
+import {
+  PencilSquareIcon,
+  TrashIcon,
+  UserGroupIcon,
+  MapPinIcon,
+  CalendarDaysIcon,
+  PlusIcon,
+} from "@heroicons/react/24/solid";
 
+/* ============================
+   Type Definitions
+   ============================ */
 type Role = "SUPER_ADMIN" | "EVENT_MANAGER" | "STAFF";
 
 interface ShortEvent {
@@ -36,21 +48,28 @@ interface EventFormData {
   photo?: File | null;
 }
 
+/* ============================
+   Component
+   ============================ */
 const AdminDashboard: React.FC = () => {
   const { user, token, logout } = useAuth() as any;
   const navigate = useNavigate();
-  const role = (user?.role || "").toUpperCase() as Role | string;
+  const role = (user?.role || "").toUpperCase() as Role;
 
   const [events, setEvents] = useState<ShortEvent[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [managers, setManagers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const refresh = () => setRefreshKey((k) => k + 1);
 
+  // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-
   const [selectedEvent, setSelectedEvent] = useState<ShortEvent | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+
   const [formData, setFormData] = useState<EventFormData>({
     title: "",
     description: "",
@@ -62,12 +81,10 @@ const AdminDashboard: React.FC = () => {
     photo: null,
   });
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
-  const [refreshKey, setRefreshKey] = useState(0);
-  const refresh = () => setRefreshKey((k) => k + 1);
-
-  /* -------------------- FETCH DATA -------------------- */
+  /* ============================
+     Data Fetching
+     ============================ */
   useEffect(() => {
     if (!token) return;
 
@@ -89,7 +106,6 @@ const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     if (!token) return;
-
     const loadMeta = async () => {
       try {
         const [catRes, mgrRes] = await Promise.all([
@@ -105,7 +121,9 @@ const AdminDashboard: React.FC = () => {
     loadMeta();
   }, [token]);
 
-  /* -------------------- HANDLERS -------------------- */
+  /* ============================
+     Handlers
+     ============================ */
   const handleLogout = () => {
     logout?.();
     localStorage.clear();
@@ -118,22 +136,13 @@ const AdminDashboard: React.FC = () => {
     setPhotoPreview(file ? URL.createObjectURL(file) : null);
   };
 
-  /* ---------- CREATE EVENT ---------- */
   const handleCreateEvent = async () => {
     try {
       setLoading(true);
       const data = new FormData();
-
-      data.append("title", formData.title || "");
-      data.append("description", formData.description || "");
-      data.append("location", formData.location || "");
-      data.append("startDate", formData.startDate || "");
-      data.append("endDate", formData.endDate || "");
-      if (formData.capacity) data.append("capacity", String(formData.capacity));
-      if (formData.ageMin) data.append("ageMin", String(formData.ageMin));
-      if (formData.ageMax) data.append("ageMax", String(formData.ageMax));
-      if (formData.categoryId) data.append("categoryId", formData.categoryId);
-      if (formData.managerId) data.append("managerId", formData.managerId);
+      Object.entries(formData).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) data.append(k, String(v));
+      });
       if (formData.photo) data.append("photo", formData.photo);
 
       await apiFetch("/events", { method: "POST", body: data }, token);
@@ -147,7 +156,6 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  /* ---------- UPDATE EVENT ---------- */
   const openEditModal = (evt: ShortEvent) => {
     setSelectedEvent(evt);
     setFormData({
@@ -192,7 +200,6 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  /* ---------- DELETE EVENT ---------- */
   const handleDeleteEvent = async () => {
     if (!deleteTargetId) return;
     try {
@@ -208,15 +215,17 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  /* -------------------- JSX -------------------- */
+  /* ============================
+     JSX
+     ============================ */
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
           <p className="text-sm text-gray-600">
-            Logged in as: <strong>{user?.email}</strong> ({role})
+            Logged in as <strong>{user?.email}</strong> ({role})
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -226,9 +235,9 @@ const AdminDashboard: React.FC = () => {
           {role === "SUPER_ADMIN" && (
             <button
               onClick={() => setShowCreateModal(true)}
-              className="px-3 py-1 bg-green-600 text-white rounded"
+              className="px-3 py-1 bg-green-600 text-white rounded flex items-center gap-1"
             >
-              + Create Event
+              <PlusIcon className="w-4 h-4" /> Create Event
             </button>
           )}
           <button onClick={handleLogout} className="px-3 py-1 bg-gray-600 text-white rounded">
@@ -237,63 +246,87 @@ const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Events Table */}
-      <div className="bg-white rounded shadow p-4">
-        <h2 className="text-lg font-medium mb-3">Events</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-600">
-                <th>Title</th>
-                <th>Location</th>
-                <th>Start</th>
-                <th>Registrants</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((evt) => (
-                <tr key={evt.id} className="border-t">
-                  <td className="py-2">{evt.title}</td>
-                  <td>{evt.location}</td>
-                  <td>{evt.start_date ? new Date(evt.start_date).toLocaleString() : "-"}</td>
-                  <td>{evt.registration_count ?? 0}</td>
-                  <td className="flex gap-2 justify-end py-2">
-                    <button
-                      onClick={() => navigate(`/admin/events/${evt.id}/registrants`)}
-                      className="px-3 py-1 bg-blue-600 text-white rounded"
-                    >
-                      Registrants
-                    </button>
-                    {(role === "SUPER_ADMIN" ||
-                      (role === "EVENT_MANAGER" && evt.manager_id === user?.id)) && (
-                      <button
-                        onClick={() => openEditModal(evt)}
-                        className="px-3 py-1 bg-yellow-500 text-white rounded"
-                      >
-                        Edit
-                      </button>
-                    )}
-                    {role === "SUPER_ADMIN" && (
-                      <button
-                        onClick={() => {
-                          setDeleteTargetId(evt.id);
-                          setShowDeleteModal(true);
-                        }}
-                        className="px-3 py-1 bg-red-600 text-white rounded"
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Events Grid */}
+      {loading ? (
+        <div className="text-center text-gray-500 py-10">Loading events...</div>
+      ) : events.length === 0 ? (
+        <div className="text-center text-gray-500 py-10">No events found.</div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {events.map((evt) => (
+            <div
+              key={evt.id}
+              className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+            >
+              {evt.photo_path ? (
+                <img
+                  src={`http://localhost:5000${evt.photo_path}`}
+                  alt={evt.title}
+                  className="h-48 w-full object-cover"
+                />
+              ) : (
+                <div className="h-48 w-full bg-gray-200 flex items-center justify-center text-gray-400 text-sm">
+                  No Image
+                </div>
+              )}
 
-      {/* Create Modal */}
+              <div className="p-4 space-y-2">
+                <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">{evt.title}</h3>
+                <p className="text-sm text-gray-600 line-clamp-2">{evt.description}</p>
+
+                <div className="text-xs text-gray-500 flex items-center gap-1 mt-2">
+                  <CalendarDaysIcon className="w-4 h-4" />
+                  {evt.start_date
+                    ? new Date(evt.start_date).toLocaleDateString()
+                    : "No start date"}
+                </div>
+
+                <div className="text-xs text-gray-500 flex items-center gap-1">
+                  <MapPinIcon className="w-4 h-4" />
+                  {evt.location || "No location"}
+                </div>
+
+                <div className="text-xs text-gray-500 flex items-center gap-1">
+                  <UserGroupIcon className="w-4 h-4" />
+                  {evt.registration_count ?? 0} registrants
+                </div>
+
+                {/* Actions */}
+                <div className="flex justify-end gap-2 mt-3">
+                  <button
+                    onClick={() => navigate(`/admin/events/${evt.id}/registrants`)}
+                    className="px-3 py-1 bg-blue-600 text-white text-xs rounded"
+                  >
+                    View
+                  </button>
+                  {(role === "SUPER_ADMIN" ||
+                    (role === "EVENT_MANAGER" && evt.manager_id === user?.id)) && (
+                    <button
+                      onClick={() => openEditModal(evt)}
+                      className="px-3 py-1 bg-yellow-500 text-white text-xs rounded flex items-center gap-1"
+                    >
+                      <PencilSquareIcon className="w-4 h-4" /> Edit
+                    </button>
+                  )}
+                  {role === "SUPER_ADMIN" && (
+                    <button
+                      onClick={() => {
+                        setDeleteTargetId(evt.id);
+                        setShowDeleteModal(true);
+                      }}
+                      className="px-3 py-1 bg-red-600 text-white text-xs rounded flex items-center gap-1"
+                    >
+                      <TrashIcon className="w-4 h-4" /> Delete
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Modals */}
       {showCreateModal && (
         <Modal
           title="Create Event"
@@ -309,7 +342,6 @@ const AdminDashboard: React.FC = () => {
         />
       )}
 
-      {/* Edit Modal */}
       {showEditModal && (
         <Modal
           title="Edit Event"
@@ -325,7 +357,6 @@ const AdminDashboard: React.FC = () => {
         />
       )}
 
-      {/* Delete Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded shadow-md w-full max-w-sm">
@@ -334,10 +365,7 @@ const AdminDashboard: React.FC = () => {
               Are you sure you want to delete this event? This action cannot be undone.
             </p>
             <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="px-3 py-1 bg-gray-300 rounded"
-              >
+              <button onClick={() => setShowDeleteModal(false)} className="px-3 py-1 bg-gray-300 rounded">
                 Cancel
               </button>
               <button
@@ -355,7 +383,9 @@ const AdminDashboard: React.FC = () => {
   );
 };
 
-/* -------------------- REUSABLE MODAL COMPONENT -------------------- */
+/* ============================
+   Reusable Modal Component
+   ============================ */
 interface ModalProps {
   title: string;
   formData: EventFormData;
@@ -386,6 +416,7 @@ const Modal: React.FC<ModalProps> = ({
       <h2 className="text-2xl font-semibold mb-6 text-center">{title}</h2>
 
       <div className="space-y-5">
+        {/* Title */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
           <input
@@ -396,6 +427,7 @@ const Modal: React.FC<ModalProps> = ({
           />
         </div>
 
+        {/* Description */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
           <textarea
@@ -406,6 +438,7 @@ const Modal: React.FC<ModalProps> = ({
           />
         </div>
 
+        {/* Dates */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
@@ -427,6 +460,7 @@ const Modal: React.FC<ModalProps> = ({
           </div>
         </div>
 
+        {/* Location + Capacity */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Location *</label>
@@ -453,6 +487,7 @@ const Modal: React.FC<ModalProps> = ({
           </div>
         </div>
 
+        {/* Photo */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Photo</label>
           {photoPreview && (
@@ -463,6 +498,7 @@ const Modal: React.FC<ModalProps> = ({
           <input type="file" accept="image/*" onChange={handleFileChange} />
         </div>
 
+        {/* Category & Manager */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
@@ -498,6 +534,7 @@ const Modal: React.FC<ModalProps> = ({
         </div>
       </div>
 
+      {/* Buttons */}
       <div className="flex justify-end mt-6 gap-3">
         <button onClick={onClose} className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
           Cancel

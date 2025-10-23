@@ -68,7 +68,7 @@ const LandingPage: React.FC = () => {
             {/* Text */}
             <div className="order-2 md:order-1">
               <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-tight text-red-500">
-                Ang Barangay 604 ay{" "}
+                Ang Barangay ay{" "}
                 <span className="text-primary-600">Online Na!</span>
               </h1>
 
