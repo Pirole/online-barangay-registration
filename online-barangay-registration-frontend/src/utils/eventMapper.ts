@@ -33,7 +33,7 @@ export function mapEvent(be: BackendEvent): FrontendEvent {
       : "",
     location: be.location,
     capacity: be.capacity ?? 0,
-    registeredCount: be.registration_count ?? 0,
+    registeredCount: be.registrant_count ?? 0,
     category: "other", // until backend adds categories
     status: be.status ?? "upcoming",
     imageUrl: be.photo_path

@@ -40,7 +40,7 @@ export interface BackendEvent {
   status: "upcoming" | "ongoing" | "completed" | "cancelled";
   created_at: string;
   updated_at: string;
-  registration_count?: number;
+  registrant_count?: number;
   photo_path?: string;
 }
 

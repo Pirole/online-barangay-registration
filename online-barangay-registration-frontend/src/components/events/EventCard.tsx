@@ -167,7 +167,7 @@ const EventCard: React.FC<EventCardProps> = ({
               className="w-full bg-gray-300 text-gray-500 font-semibold py-3 px-4 rounded-lg cursor-not-allowed"
             >
               {event.status === 'completed' ? 'Event Completed' : 
-               event.registeredCount >= event.capacity ? 'Fully Booked' : 'Registration Closed'}
+               event.registeredCount >= event.capacity ? 'Event Full' : 'Registration Closed'}
             </button>
           )}
           

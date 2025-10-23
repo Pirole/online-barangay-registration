@@ -1,8 +1,11 @@
+// src/pages/admin/EventManagement.tsx
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { apiFetch } from "../../lib/api";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 
+/* -------------------- TYPES -------------------- */
 interface EventData {
   id?: string;
   title: string;
@@ -27,9 +30,7 @@ interface Registrant {
   createdAt: string;
 }
 
-// ====================
-// EVENT CREATE/EDIT MODAL
-// ====================
+/* -------------------- EVENT CREATE/EDIT MODAL -------------------- */
 interface ModalProps {
   open: boolean;
   onClose: () => void;
@@ -47,9 +48,8 @@ const EventModal: React.FC<ModalProps> = ({ open, onClose, event, onSave }) => {
   });
 
   useEffect(() => {
-    if (event) {
-      setFormData(event);
-    } else {
+    if (event) setFormData(event);
+    else
       setFormData({
         title: "",
         description: "",
@@ -57,14 +57,11 @@ const EventModal: React.FC<ModalProps> = ({ open, onClose, event, onSave }) => {
         start_date: "",
         end_date: "",
       });
-    }
   }, [event]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
+  ) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
   const handleSave = () => onSave(formData);
 
@@ -136,9 +133,7 @@ const EventModal: React.FC<ModalProps> = ({ open, onClose, event, onSave }) => {
   );
 };
 
-// ====================
-// REGISTRANTS MODAL
-// ====================
+/* -------------------- REGISTRANTS MODAL -------------------- */
 interface RegistrantModalProps {
   open: boolean;
   onClose: () => void;
@@ -154,26 +149,44 @@ const RegistrantModal: React.FC<RegistrantModalProps> = ({
 }) => {
   const [registrants, setRegistrants] = useState<Registrant[]>([]);
   const [loading, setLoading] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{
+    id: string;
+    type: "approve" | "reject";
+  } | null>(null);
+
+  const loadRegistrants = async () => {
+    if (!eventId) return;
+    setLoading(true);
+    try {
+      const res = await apiFetch(`/registrations/event/${eventId}?status=all`, {}, token);
+      setRegistrants(res.data || []);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load registrants");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!eventId || !open) return;
-    const loadRegistrants = async () => {
-      setLoading(true);
-      try {
-        const res = await apiFetch(
-          `/registrations/event/${eventId}?status=all`,
-          {},
-          token
-        );
-        setRegistrants(res.data || []);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadRegistrants();
-  }, [eventId, open]);
+    if (open && eventId) loadRegistrants();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, eventId]);
+
+  const handleStatusChange = async (id: string, status: "approved" | "rejected") => {
+    try {
+      await apiFetch(`/registrations/${id}/approval`, {
+        method: "POST",
+        body: JSON.stringify({ status, eventId }),
+      }, token);
+      toast.success(`Registrant ${status === "approved" ? "approved" : "rejected"}`);
+      setConfirmAction(null);
+      loadRegistrants();
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update status");
+    }
+  };
 
   if (!open) return null;
 
@@ -193,7 +206,8 @@ const RegistrantModal: React.FC<RegistrantModalProps> = ({
                 <th className="p-2 text-left">Name</th>
                 <th className="p-2 text-left">Barangay</th>
                 <th className="p-2 text-left">Status</th>
-                <th className="p-2 text-left">Date Registered</th>
+                <th className="p-2 text-left">Registered</th>
+                <th className="p-2 text-left">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -205,9 +219,28 @@ const RegistrantModal: React.FC<RegistrantModalProps> = ({
                       : "—"}
                   </td>
                   <td className="p-2">{r.profile?.barangay || "—"}</td>
-                  <td className="p-2">{r.status}</td>
+                  <td className="p-2 capitalize">{r.status}</td>
                   <td className="p-2">
                     {new Date(r.createdAt).toLocaleString()}
+                  </td>
+                  <td className="p-2 flex gap-2">
+                    {r.status?.toLowerCase() === "pending" && (
+  <>
+    <button
+      onClick={() => setConfirmAction({ id: r.id, type: "approve" })}
+      className="px-2 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+    >
+      Approve
+    </button>
+    <button
+      onClick={() => setConfirmAction({ id: r.id, type: "reject" })}
+      className="px-2 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+    >
+      Reject
+    </button>
+  </>
+)}
+
                   </td>
                 </tr>
               ))}
@@ -223,39 +256,71 @@ const RegistrantModal: React.FC<RegistrantModalProps> = ({
             Close
           </button>
         </div>
+
+        {/* In-page confirmation popup */}
+        {confirmAction && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full text-center">
+              <h3 className="text-lg font-semibold mb-4">
+                Confirm {confirmAction.type === "approve" ? "Approval" : "Rejection"}
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to{" "}
+                <span
+                  className={
+                    confirmAction.type === "approve" ? "text-green-600" : "text-red-600"
+                  }
+                >
+                  {confirmAction.type}
+                </span>{" "}
+                this registrant?
+              </p>
+              <div className="flex justify-center gap-3">
+                <button
+                  onClick={() => setConfirmAction(null)}
+                  className="px-4 py-1 bg-gray-300 rounded hover:bg-gray-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() =>
+                    handleStatusChange(
+                      confirmAction.id,
+                      confirmAction.type === "approve" ? "approved" : "rejected"
+                    )
+                  }
+                  className={`px-4 py-1 text-white rounded ${
+                    confirmAction.type === "approve"
+                      ? "bg-green-600 hover:bg-green-700"
+                      : "bg-red-600 hover:bg-red-700"
+                  }`}
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-// ====================
-// MAIN PAGE
-// ====================
+/* -------------------- MAIN PAGE -------------------- */
 const EventManagement: React.FC = () => {
-  const { user, token, logout } = useAuth() as any;
+  const { user, token } = useAuth() as any;
   const navigate = useNavigate();
-
-  const handleLogout = (): void => {
-    if (logout) logout();
-    else {
-      localStorage.clear();
-      sessionStorage.clear();
-    }
-    navigate("/login");
-  };
-
   const role = (user?.role || "").toUpperCase();
   const canEdit = ["SUPER_ADMIN", "EVENT_MANAGER"].includes(role);
 
   const [events, setEvents] = useState<EventData[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [registrantModalOpen, setRegistrantModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<EventData | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
-  const loadEvents = async (): Promise<void> => {
+  const loadEvents = async () => {
     setLoading(true);
     try {
       const resp = await apiFetch(
@@ -266,8 +331,8 @@ const EventManagement: React.FC = () => {
         token
       );
       setEvents(resp.data || []);
-    } catch (error: any) {
-      setError(error.message || "Failed to load events");
+    } catch {
+      toast.error("Failed to load events");
     } finally {
       setLoading(false);
     }
@@ -275,35 +340,24 @@ const EventManagement: React.FC = () => {
 
   useEffect(() => {
     loadEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSave = async (data: EventData): Promise<void> => {
+  const handleSave = async (data: EventData) => {
     try {
       const method = data.id ? "PUT" : "POST";
       const url = data.id ? `/events/${data.id}` : `/events`;
       await apiFetch(
         url,
-        {
-          method,
-          body: JSON.stringify(data),
-        },
+        { method, body: JSON.stringify(data) },
         token
       );
       setModalOpen(false);
       setEditingEvent(null);
+      toast.success("Event saved successfully");
       loadEvents();
-    } catch (error: any) {
-      alert(error.message || "Failed to save event");
-    }
-  };
-
-  const handleDelete = async (id: string): Promise<void> => {
-    if (!confirm("Are you sure you want to delete this event?")) return;
-    try {
-      await apiFetch(`/events/${id}`, { method: "DELETE" }, token);
-      loadEvents();
-    } catch (error: any) {
-      alert(error.message || "Delete failed");
+    } catch {
+      toast.error("Failed to save event");
     }
   };
 
@@ -311,18 +365,7 @@ const EventManagement: React.FC = () => {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold">Event Management</h1>
-        <div className="flex gap-3">
-          <button
-            onClick={handleLogout}
-            className="px-3 py-1 rounded bg-gray-600 text-white hover:bg-gray-700"
-          >
-            Logout
-          </button>
-        
-        </div>
       </div>
-
-      {error && <div className="text-red-600 mb-3">{error}</div>}
 
       <div className="bg-white p-4 rounded shadow overflow-x-auto">
         <table className="w-full text-sm">
@@ -341,14 +384,8 @@ const EventManagement: React.FC = () => {
               <tr key={evt.id} className="border-t">
                 <td className="py-2">{evt.title}</td>
                 <td>{evt.location || "-"}</td>
-                <td>
-                  {evt.start_date
-                    ? new Date(evt.start_date).toLocaleString()
-                    : "-"}
-                </td>
-                <td>
-                  {evt.end_date ? new Date(evt.end_date).toLocaleString() : "-"}
-                </td>
+                <td>{evt.start_date ? new Date(evt.start_date).toLocaleString() : "-"}</td>
+                <td>{evt.end_date ? new Date(evt.end_date).toLocaleString() : "-"}</td>
                 <td>
                   <button
                     onClick={() => {
@@ -362,33 +399,22 @@ const EventManagement: React.FC = () => {
                 </td>
                 {canEdit && (
                   <td className="text-right">
-                    <div className="inline-flex gap-2">
-                      <button
-                        onClick={() => {
-                          setEditingEvent(evt);
-                          setModalOpen(true);
-                        }}
-                        className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(evt.id!)}
-                        className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => {
+                        setEditingEvent(evt);
+                        setModalOpen(true);
+                      }}
+                      className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600"
+                    >
+                      Edit
+                    </button>
                   </td>
                 )}
               </tr>
             ))}
             {events.length === 0 && !loading && (
               <tr>
-                <td
-                  colSpan={canEdit ? 6 : 5}
-                  className="p-4 text-center text-gray-500"
-                >
+                <td colSpan={6} className="p-4 text-center text-gray-500">
                   No events found.
                 </td>
               </tr>

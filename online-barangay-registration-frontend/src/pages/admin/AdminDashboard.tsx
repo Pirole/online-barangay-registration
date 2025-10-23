@@ -7,7 +7,7 @@ import toast from "react-hot-toast";
 import {
   PencilSquareIcon,
   TrashIcon,
-  UserGroupIcon,
+  UserGroupIcon,  
   MapPinIcon,
   CalendarDaysIcon,
   PlusIcon,
@@ -31,7 +31,7 @@ interface ShortEvent {
   age_max?: number;
   category_id?: string;
   manager_id?: string;
-  registration_count?: number;
+  registrant_count?: number;
   photo_path?: string;
 }
 
@@ -224,11 +224,10 @@ const AdminDashboard: React.FC = () => {
       {/* Header */}
      
         <div>
-          <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
-          <br></br>
+          <h1 className="text-2xl font-semibold padding-bottom-3 mb-6 ">Admin Dashboard</h1>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 padding-bottom-3 mb-6">
           <button onClick={refresh} className="px-3 py-1 bg-blue-600 text-white rounded">
             Refresh
           </button>
@@ -244,8 +243,7 @@ const AdminDashboard: React.FC = () => {
             Logout
           </button>
         </div>
-        <br></br>
-      
+          
 
       {/* Events Grid */}
       {loading ? (
@@ -289,7 +287,7 @@ const AdminDashboard: React.FC = () => {
 
                 <div className="text-xs text-gray-500 flex items-center gap-1">
                   <UserGroupIcon className="w-4 h-4" />
-                  {evt.registration_count ?? 0} registrants
+                  {evt.registrant_count ?? 0} registrants
                 </div>
 
                 {/* Actions */}
