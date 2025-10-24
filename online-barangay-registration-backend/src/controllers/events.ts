@@ -5,7 +5,7 @@ import fs from "fs";
 import { query } from "../config/database";
 import { AppError } from "../middleware/errorHandler";
 import { logger } from "../utils/logger";
-import prisma from "../config/prisma"; // ✅ for audit logging only
+import prisma from "../config/prisma"; // Prisma client for audit logs and custom fields
 
 /**
  * Helper: Save uploaded event photo (disk-safe version)
@@ -18,19 +18,19 @@ const saveEventPhoto = (file?: Express.Multer.File): string | null => {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
 
-  // ✅ If multer already saved the file, just move or rename it
-  if (file.path && !file.buffer) {
+  // If multer already saved the file, just move or rename it
+  if ((file as any).path && !(file as any).buffer) {
     const fileName = `${Date.now()}_${file.originalname.replace(/\s+/g, "_")}`;
     const destPath = path.join(uploadsDir, fileName);
-    fs.renameSync(file.path, destPath);
+    fs.renameSync((file as any).path, destPath);
     return `/uploads/events/${fileName}`;
   }
 
-  // ✅ Otherwise, write from buffer (for memoryStorage)
-  if (file.buffer) {
+  // Otherwise, write from buffer (for memoryStorage)
+  if ((file as any).buffer) {
     const fileName = `${Date.now()}_${file.originalname.replace(/\s+/g, "_")}`;
     const destPath = path.join(uploadsDir, fileName);
-    fs.writeFileSync(destPath, file.buffer);
+    fs.writeFileSync(destPath, (file as any).buffer);
     return `/uploads/events/${fileName}`;
   }
 
@@ -46,34 +46,30 @@ export const listEvents = async (req: Request, res: Response, next: NextFunction
     const { status = "upcoming", search, page = 1, limit = 20, managerId } = req.query as any;
     const offset = (Number(page) - 1) * Number(limit);
 
-    const user = (req as any).user; // ✅ from JWT middleware
+    const user = (req as any).user; // from JWT middleware
     const whereClauses: string[] = [];
     const params: any[] = [];
     let idx = 1;
 
-    // 🔍 Optional search filter
+    // Optional search filter
     if (search) {
       whereClauses.push(`(e.title ILIKE $${idx} OR e.description ILIKE $${idx})`);
       params.push(`%${search}%`);
       idx++;
     }
 
-    // 🔐 Role-based scoping
+    // Role-based scoping
     if (user?.role === "EVENT_MANAGER") {
-      // ✅ Force only their events
       whereClauses.push(`e.manager_id = $${idx}`);
       params.push(user.id);
       idx++;
-    } else if (managerId) {
-      // ✅ Allow manual filter only for Super Admin
-      if (user?.role === "SUPER_ADMIN") {
-        whereClauses.push(`e.manager_id = $${idx}`);
-        params.push(managerId);
-        idx++;
-      }
+    } else if (managerId && user?.role === "SUPER_ADMIN") {
+      whereClauses.push(`e.manager_id = $${idx}`);
+      params.push(managerId);
+      idx++;
     }
 
-    // 📅 Status filter
+    // Status filter
     if (status === "upcoming") {
       whereClauses.push(`e.start_date > NOW()`);
     } else if (status === "ongoing") {
@@ -103,6 +99,8 @@ export const listEvents = async (req: Request, res: Response, next: NextFunction
         e.manager_id,
         e.category_id,
         e.photo_path,
+        e.registration_mode,
+        e.team_member_slots,
         e.created_at,
         e.updated_at,
         COUNT(r.id) AS registrant_count
@@ -132,7 +130,6 @@ export const listEvents = async (req: Request, res: Response, next: NextFunction
   }
 };
 
-
 /**
  * GET /events/:id
  */
@@ -149,17 +146,14 @@ export const getEvent = async (req: Request, res: Response, next: NextFunction) 
 
 /**
  * POST /events
+ * Note: only SUPER_ADMIN allowed (controller enforces)
  */
-export const createEvent = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<Response | void> => {
+export const createEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Accept both camelCase and snake_case from frontend
     if (req.user?.role !== "SUPER_ADMIN") {
       return res.status(403).json({ success: false, message: "Forbidden: Super Admins only" });
     }
+
     const {
       title,
       description,
@@ -173,17 +167,17 @@ export const createEvent = async (
       ageMax,
       categoryId,
       managerId,
+      registrationMode = "individual",
+      teamMemberSlots = 1,
     } = req.body;
 
-    // Normalize to the correct variable names for SQL
     const finalStartDate = startDate || start_date;
     const finalEndDate = endDate || end_date;
 
     if (!title || !location || !finalStartDate || !finalEndDate || !categoryId) {
       return res.status(400).json({
         success: false,
-        message:
-          "Missing required fields (title, location, startDate, endDate, categoryId)",
+        message: "Missing required fields (title, location, startDate, endDate, categoryId)",
       });
     }
 
@@ -194,12 +188,14 @@ export const createEvent = async (
       INSERT INTO events (
         id, title, description, location, start_date, end_date,
         capacity, age_min, age_max, category_id, manager_id,
-        photo_path, is_active, created_at, updated_at
+        photo_path, registration_mode, team_member_slots,
+        is_active, created_at, updated_at
       )
       VALUES (
         gen_random_uuid(), $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
-        $11, true, NOW(), NOW()
+        $11, $12, $13,
+        true, NOW(), NOW()
       )
       RETURNING id
       `,
@@ -215,13 +211,14 @@ export const createEvent = async (
         categoryId,
         managerId || null,
         photoPath,
+        registrationMode,
+        teamMemberSlots,
       ]
     );
 
     const newEventId = result.rows[0].id;
-
-    // ✅ Audit Log
     const actor = (req as any).user;
+
     if (actor) {
       await prisma.auditLog.create({
         data: {
@@ -237,19 +234,18 @@ export const createEvent = async (
     }
 
     logger.info(`✅ Created new event: ${title} by ${actor?.email || "unknown"}`);
-
     return res.status(201).json({
       success: true,
       data: { id: newEventId },
       message: "Event created successfully",
     });
   } catch (error) {
-    return next(error);
+    next(error);
   }
 };
 
 /**
- * PUT /events/:id
+ * PATCH /events/:id
  */
 export const updateEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -266,6 +262,8 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
       "isActive",
       "managerId",
       "categoryId",
+      "registrationMode",
+      "teamMemberSlots",
     ];
 
     const sets: string[] = [];
@@ -279,7 +277,6 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
       vals.push((req.body as any)[key]);
     }
 
-    // ✅ Handle photo upload (if provided)
     const newPhotoPath = saveEventPhoto(req.file);
     if (newPhotoPath) {
       sets.push(`photo_path = $${idx++}`);
@@ -292,13 +289,8 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
     }
 
     vals.push(id);
+    await query(`UPDATE events SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $${idx}`, vals);
 
-    await query(
-      `UPDATE events SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $${idx}`,
-      vals
-    );
-
-    // ✅ Audit Log
     const actor = (req as any).user;
     if (actor) {
       await prisma.auditLog.create({
@@ -327,13 +319,11 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
 export const deleteEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params.id;
-
     const existing = await query(`SELECT title FROM events WHERE id = $1`, [id]);
     if (existing.rows.length === 0) throw new AppError("Event not found", 404);
 
     await query(`DELETE FROM events WHERE id = $1`, [id]);
 
-    // ✅ Audit Log
     const actor = (req as any).user;
     if (actor) {
       await prisma.auditLog.create({
@@ -351,6 +341,175 @@ export const deleteEvent = async (req: Request, res: Response, next: NextFunctio
 
     logger.info(`🗑️ Deleted event ${id} by ${actor?.email || "unknown"}`);
     res.json({ success: true, message: "Event deleted" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/* -------------------------------------------------------------------------- */
+/*                          CUSTOM FIELD CONTROLLERS                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * GET /events/:eventId/custom-fields
+ * Public (optionalAuth). Returns array of custom fields for the event.
+ */
+export const listCustomFieldsForEvent = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { eventId } = req.params;
+
+    // fetch event with its customFields ordered by sortOrder
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      include: { customFields: { orderBy: { sortOrder: "asc" } } },
+    });
+
+    if (!event) throw new AppError("Event not found", 404);
+
+    res.json({ success: true, data: event.customFields });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /events/:eventId/custom-fields
+ * Only SUPER_ADMIN allowed (extra-safeguard)
+ * Body: { name, type, required?, predefined?, options?, sortOrder? }
+ */
+export const createCustomField = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Enforce role at controller-level (defense in depth)
+    if (req.user?.role !== "SUPER_ADMIN") {
+      return res.status(403).json({ success: false, message: "Forbidden: Super Admins only" });
+    }
+
+    const { eventId } = req.params;
+    const { name, type, required = false, predefined = false, options, sortOrder = 0 } = req.body;
+
+    if (!name || !type) throw new AppError("Missing required fields: name, type", 400);
+
+    // Ensure event exists
+    const ev = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!ev) throw new AppError("Event not found", 404);
+
+    const newField = await prisma.customField.create({
+      data: {
+        eventId,
+        name,
+        type,
+        required: Boolean(required),
+        predefined: Boolean(predefined),
+        // cast options to any to satisfy types if needed; Prisma accepts Json types
+        options: options ? (options as any) : undefined,
+        sortOrder: Number(sortOrder) || 0,
+      },
+    });
+
+    // Audit log
+    const actor = (req as any).user;
+    if (actor) {
+      await prisma.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: "CREATE",
+          targetType: "CUSTOM_FIELD",
+          targetId: newField.id,
+          metadata: { eventId, name, type },
+          ipAddress: req.ip,
+          userAgent: req.get("User-Agent") || "",
+        },
+      });
+    }
+
+    res.status(201).json({ success: true, data: newField });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PUT /events/:eventId/custom-fields/:fieldId
+ * Only SUPER_ADMIN allowed
+ */
+export const updateCustomField = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (req.user?.role !== "SUPER_ADMIN") {
+      return res.status(403).json({ success: false, message: "Forbidden: Super Admins only" });
+    }
+
+    const { eventId, fieldId } = req.params;
+    const patch = req.body;
+
+    const existing = await prisma.customField.findFirst({ where: { id: fieldId, eventId } });
+    if (!existing) throw new AppError("Custom field not found", 404);
+
+    const updated = await prisma.customField.update({
+      where: { id: fieldId },
+      data: {
+        name: patch.name ?? existing.name,
+        type: patch.type ?? existing.type,
+        required: patch.required !== undefined ? Boolean(patch.required) : existing.required,
+        predefined: patch.predefined !== undefined ? Boolean(patch.predefined) : existing.predefined,
+        options: patch.options !== undefined ? (patch.options as any) : existing.options,
+        sortOrder: patch.sortOrder !== undefined ? Number(patch.sortOrder) : existing.sortOrder,
+      },
+    });
+
+    // Audit log
+    const actor = (req as any).user;
+    if (actor) {
+      await prisma.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: "UPDATE",
+          targetType: "CUSTOM_FIELD",
+          targetId: updated.id,
+          metadata: { eventId, updated },
+          ipAddress: req.ip,
+          userAgent: req.get("User-Agent") || "",
+        },
+      });
+    }
+
+    res.json({ success: true, message: "Custom field updated", data: updated });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * DELETE /events/:eventId/custom-fields/:fieldId
+ * Only SUPER_ADMIN allowed
+ */
+export const deleteCustomField = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (req.user?.role !== "SUPER_ADMIN") {
+      return res.status(403).json({ success: false, message: "Forbidden: Super Admins only" });
+    }
+
+    const { eventId, fieldId } = req.params;
+    const existing = await prisma.customField.findFirst({ where: { id: fieldId, eventId } });
+    if (!existing) throw new AppError("Custom field not found", 404);
+
+    await prisma.customField.delete({ where: { id: fieldId } });
+
+    const actor = (req as any).user;
+    if (actor) {
+      await prisma.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: "DELETE",
+          targetType: "CUSTOM_FIELD",
+          targetId: fieldId,
+          metadata: { eventId, name: existing.name },
+          ipAddress: req.ip,
+          userAgent: req.get("User-Agent") || "",
+        },
+      });
+    }
+
+    res.json({ success: true, message: "Custom field deleted" });
   } catch (error) {
     next(error);
   }

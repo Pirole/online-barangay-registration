@@ -50,6 +50,22 @@ export const createEventCustomField = async (req: Request, res: Response, next: 
       },
     });
 
+    // ✅ Audit log
+    const actor = (req as any).user;
+    if (actor) {
+      await prisma.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: "CREATE",
+          targetType: "CUSTOM_FIELD",
+          targetId: created.id,
+          metadata: { name, type },
+          ipAddress: req.ip,
+          userAgent: req.get("User-Agent") || "",
+        },
+      });
+    }
+
     res.status(201).json({ success: true, data: created });
   } catch (err) {
     next(err);
@@ -77,6 +93,22 @@ export const updateEventCustomField = async (req: Request, res: Response, next: 
       },
     });
 
+    // ✅ Audit log
+    const actor = (req as any).user;
+    if (actor) {
+      await prisma.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: "UPDATE",
+          targetType: "CUSTOM_FIELD",
+          targetId: fieldId,
+          metadata: { before: field, after: updated },
+          ipAddress: req.ip,
+          userAgent: req.get("User-Agent") || "",
+        },
+      });
+    }
+
     res.json({ success: true, data: updated });
   } catch (err) {
     next(err);
@@ -95,8 +127,30 @@ export const deleteEventCustomField = async (req: Request, res: Response, next: 
 
     await prisma.customField.delete({ where: { id: fieldId } });
 
+    // ✅ Audit log
+    const actor = (req as any).user;
+    if (actor) {
+      await prisma.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: "DELETE",
+          targetType: "CUSTOM_FIELD",
+          targetId: fieldId,
+          metadata: { name: field.name },
+          ipAddress: req.ip,
+          userAgent: req.get("User-Agent") || "",
+        },
+      });
+    }
+
     res.json({ success: true, message: "Custom field deleted" });
   } catch (err) {
     next(err);
   }
+};
+export default {
+  listEventCustomFields,
+  createEventCustomField,
+  updateEventCustomField,
+  deleteEventCustomField,
 };
