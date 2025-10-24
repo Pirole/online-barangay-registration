@@ -142,6 +142,7 @@ model EventCategory {
 // REGISTRATIONS + TEAMS
 // ========================
 
+// inside or near your Registration model - add this relation field
 model Registration {
   id          String             @id @default(uuid())
   eventId     String             @map("event_id")
@@ -161,8 +162,12 @@ model Registration {
   qrCodes QrCode[]
   otpRequests OtpRequest[]
 
+  // 🆕 relation to dynamic field responses
+  fieldResponses RegistrationFieldResponse[]
+
   @@map("registrations")
 }
+
 
 model Team {
   id        String   @id @default(uuid())
@@ -188,6 +193,20 @@ model TeamMember {
 
   @@map("team_members")
 }
+
+model RegistrationFieldResponse {
+  id              String        @id @default(uuid())
+  registrationId  String        @map("registration_id")
+  fieldId         String        @map("field_id")
+  value           String
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  registration    Registration  @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  field           CustomField   @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@map("registration_field_responses")
+}
+
 
 // ========================
 // LOGGING & SECURITY
@@ -260,5 +279,8 @@ model CustomField {
 
   event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
+  fieldResponses RegistrationFieldResponse[]
+
   @@map("custom_fields")
 }
+
