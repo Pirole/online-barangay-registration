@@ -37,8 +37,6 @@ const saveEventPhoto = (file?: Express.Multer.File): string | null => {
   return null;
 };
 
-
-
 /**
  * GET /events
  * Returns list of events with registrant counts + optional filtering

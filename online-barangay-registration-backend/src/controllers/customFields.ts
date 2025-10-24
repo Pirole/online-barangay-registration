@@ -1,81 +1,102 @@
-import { Request, Response, NextFunction } from 'express';
-import { query } from '../config/database';
-import { AppError } from '../middleware/errorHandler';
+import { Request, Response, NextFunction } from "express";
+import prisma from "../config/prisma";
+import { AppError } from "../middleware/errorHandler";
 
-export const createCustomField = async (req: Request, res: Response, next: NextFunction) => {
+/**
+ * GET /events/:id/custom-fields
+ * Public listing of fields for a specific event
+ */
+export const listEventCustomFields = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { eventId, name, type, required = false, predefined = false } = req.body;
-    const insert = await query(
-      `INSERT INTO custom_fields (event_id, name, type, required, predefined, created_at) VALUES ($1,$2,$3,$4,$5,NOW()) RETURNING id`,
-      [eventId, name, type, required, predefined]
-    );
-    res.status(201).json({ success: true, data: insert.rows[0] });
-  } catch (error) {
-    next(error);
+    const eventId = req.params.id;
+
+    const fields = await prisma.customField.findMany({
+      where: { eventId },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        required: true,
+        predefined: true,
+      },
+    });
+
+    res.json({ success: true, data: fields });
+  } catch (err) {
+    next(err);
   }
 };
 
-export const listCustomFieldsForEvent = async (req: Request, res: Response, next: NextFunction) => {
+/**
+ * POST /events/:id/custom-fields
+ */
+export const createEventCustomField = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const eventId = req.params.eventId;
-    const rows = await query(`SELECT * FROM custom_fields WHERE event_id = $1 ORDER BY created_at`, [eventId]);
-    res.json({ success: true, data: rows.rows });
-  } catch (error) {
-    next(error);
+    const eventId = req.params.id;
+    const { name, type, required, predefined } = req.body;
+
+    if (!name || !type) {
+      throw new AppError("name and type are required", 400);
+    }
+
+    const created = await prisma.customField.create({
+      data: {
+        eventId,
+        name,
+        type,
+        required: required === "true" || required === true,
+        predefined: predefined === "true" || predefined === true,
+      },
+    });
+
+    res.status(201).json({ success: true, data: created });
+  } catch (err) {
+    next(err);
   }
 };
 
-export const updateCustomField = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+/**
+ * PUT /events/:id/custom-fields/:fieldId
+ */
+export const updateEventCustomField = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const id = req.params.id;
-    const { name, type, required } = req.body;
+    const { id: eventId, fieldId } = req.params as any;
+    const { name, type, required, predefined } = req.body;
 
-    const fields: string[] = [];
-    const vals: any[] = [];
-    let idx = 1;
+    const field = await prisma.customField.findUnique({ where: { id: fieldId } });
+    if (!field || field.eventId !== eventId) throw new AppError("Custom field not found", 404);
 
-    if (name !== undefined) {
-      fields.push(`name = $${idx++}`);
-      vals.push(name);
-    }
-    if (type !== undefined) {
-      fields.push(`type = $${idx++}`);
-      vals.push(type);
-    }
-    if (required !== undefined) {
-      fields.push(`required = $${idx++}`);
-      vals.push(required);
-    }
+    const updated = await prisma.customField.update({
+      where: { id: fieldId },
+      data: {
+        name: name ?? field.name,
+        type: type ?? field.type,
+        required: required ?? field.required,
+        predefined: predefined ?? field.predefined,
+      },
+    });
 
-    if (fields.length === 0) {
-      return res.json({ success: true, message: 'No change' });
-    }
-
-    vals.push(id);
-
-    await query(
-      `UPDATE custom_fields
-       SET ${fields.join(', ')}, created_at = created_at
-       WHERE id = $${idx}`,
-      vals
-    ); // preserve created_at
-
-    return res.json({ success: true, message: 'Updated' }); // <-- add return
-  } catch (error) {
-    return next(error); // <-- add return
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    next(err);
   }
 };
 
-export const deleteCustomField = async (req: Request, res: Response, next: NextFunction) => {
+/**
+ * DELETE /events/:id/custom-fields/:fieldId
+ */
+export const deleteEventCustomField = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const id = req.params.id;
-    await query(`DELETE FROM custom_fields WHERE id = $1`, [id]);
-    res.json({ success: true, message: 'Deleted' });
-  } catch (error) {
-    next(error);
+    const { id: eventId, fieldId } = req.params as any;
+
+    const field = await prisma.customField.findUnique({ where: { id: fieldId } });
+    if (!field || field.eventId !== eventId) throw new AppError("Custom field not found", 404);
+
+    await prisma.customField.delete({ where: { id: fieldId } });
+
+    res.json({ success: true, message: "Custom field deleted" });
+  } catch (err) {
+    next(err);
   }
 };

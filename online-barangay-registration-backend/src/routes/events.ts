@@ -4,6 +4,7 @@ import * as eventsController from "../controllers/events";
 import * as registrationsController from "../controllers/registrations";
 import { authenticateToken, authorize, optionalAuth } from "../middleware/auth";
 import { uploadEventPhoto } from "../config/multer";
+import * as customFieldsController from "../controllers/customFields";
 
 const router = Router();
 
@@ -47,4 +48,34 @@ router.delete(
   eventsController.deleteEvent
 );
 
+// ✅ Public listing (optionalAuth)
+router.get(
+  "/:id/custom-fields",
+  optionalAuth,
+  customFieldsController.listEventCustomFields
+);
+
+// ✅ Create new custom field (SUPER_ADMIN or assigned EVENT_MANAGER)
+router.post(
+  "/:id/custom-fields",
+  authenticateToken,
+  authorize("SUPER_ADMIN"),
+  customFieldsController.createEventCustomField
+);
+
+// ✅ Update custom field
+router.put(
+  "/:id/custom-fields/:fieldId",
+  authenticateToken,
+  authorize("SUPER_ADMIN"),
+  customFieldsController.updateEventCustomField
+);
+
+// ✅ Delete custom field
+router.delete(
+  "/:id/custom-fields/:fieldId",
+  authenticateToken,
+  authorize("SUPER_ADMIN"),
+  customFieldsController.deleteEventCustomField
+);
 export default router;
