@@ -7,12 +7,11 @@ import toast from "react-hot-toast";
 import {
   PencilSquareIcon,
   TrashIcon,
-  UserGroupIcon,  
+  UserGroupIcon,
   MapPinIcon,
   CalendarDaysIcon,
   PlusIcon,
 } from "@heroicons/react/24/solid";
-import AdminLayout from "../../layouts/AdminLayout";
 
 /* ============================
    Type Definitions
@@ -33,6 +32,8 @@ interface ShortEvent {
   manager_id?: string;
   registrant_count?: number;
   photo_path?: string;
+  registration_mode?: string;
+  team_member_slots?: number;
 }
 
 interface EventFormData {
@@ -47,6 +48,8 @@ interface EventFormData {
   categoryId?: string;
   managerId?: string;
   photo?: File | null;
+  registrationMode?: "individual" | "team" | "both";
+  teamMemberSlots?: number;
 }
 
 /* ============================
@@ -80,6 +83,8 @@ const AdminDashboard: React.FC = () => {
     categoryId: "",
     managerId: "",
     photo: null,
+    registrationMode: "individual",
+    teamMemberSlots: 1,
   });
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
@@ -175,6 +180,8 @@ const AdminDashboard: React.FC = () => {
       categoryId: evt.category_id,
       managerId: evt.manager_id,
       photo: null,
+      registrationMode: (evt.registration_mode as any) || "individual",
+      teamMemberSlots: evt.team_member_slots || 1,
     });
     setPhotoPreview(evt.photo_path ? `http://localhost:5000${evt.photo_path}` : null);
     setShowEditModal(true);
@@ -216,36 +223,27 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  /* ============================
-     JSX
-     ============================ */
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      {/* Header */}
-     
-        <div>
-          <h1 className="text-2xl font-semibold padding-bottom-3 mb-6 ">Admin Dashboard</h1>
-        </div>
-        
-        <div className="flex items-center gap-2 padding-bottom-3 mb-6">
-          <button onClick={refresh} className="px-3 py-1 bg-blue-600 text-white rounded">
-            Refresh
+      <div className="flex items-center gap-2 mb-6">
+        <h1 className="text-2xl font-semibold flex-1">Admin Dashboard</h1>
+        <button onClick={refresh} className="px-3 py-1 bg-blue-600 text-white rounded">
+          Refresh
+        </button>
+        {role === "SUPER_ADMIN" && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-3 py-1 bg-green-600 text-white rounded flex items-center gap-1"
+          >
+            <PlusIcon className="w-4 h-4" /> Create Event
           </button>
-          {role === "SUPER_ADMIN" && (
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="px-3 py-1 bg-green-600 text-white rounded flex items-center gap-1"
-            >
-              <PlusIcon className="w-4 h-4" /> Create Event
-            </button>
-          )}
-          <button onClick={handleLogout} className="px-3 py-1 bg-gray-600 text-white rounded">
-            Logout
-          </button>
-        </div>
-          
+        )}
+        <button onClick={handleLogout} className="px-3 py-1 bg-gray-600 text-white rounded">
+          Logout
+        </button>
+      </div>
 
-      {/* Events Grid */}
+      {/* Grid */}
       {loading ? (
         <div className="text-center text-gray-500 py-10">Loading events...</div>
       ) : events.length === 0 ? (
@@ -268,9 +266,8 @@ const AdminDashboard: React.FC = () => {
                   No Image
                 </div>
               )}
-
               <div className="p-4 space-y-2">
-                <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">{evt.title}</h3>
+                <h3 className="text-lg font-semibold text-gray-900">{evt.title}</h3>
                 <p className="text-sm text-gray-600 line-clamp-2">{evt.description}</p>
 
                 <div className="text-xs text-gray-500 flex items-center gap-1 mt-2">
@@ -279,14 +276,11 @@ const AdminDashboard: React.FC = () => {
                     ? new Date(evt.start_date).toLocaleDateString()
                     : "No start date"}
                 </div>
-
                 <div className="text-xs text-gray-500 flex items-center gap-1">
-                  <MapPinIcon className="w-4 h-4" />
-                  {evt.location || "No location"}
+                  <MapPinIcon className="w-4 h-4" /> {evt.location || "No location"}
                 </div>
-
                 <div className="text-xs text-gray-500 flex items-center gap-1">
-                  <UserGroupIcon className="w-4 h-4" />
+                  <UserGroupIcon className="w-4 h-4" />{" "}
                   {evt.registrant_count ?? 0} registrants
                 </div>
 
@@ -298,15 +292,12 @@ const AdminDashboard: React.FC = () => {
                   >
                     View
                   </button>
-                  {(role === "SUPER_ADMIN" ||
-                    (role === "EVENT_MANAGER" && evt.manager_id === user?.id)) && (
-                    <button
-                      onClick={() => openEditModal(evt)}
-                      className="px-3 py-1 bg-yellow-500 text-white text-xs rounded flex items-center gap-1"
-                    >
-                      <PencilSquareIcon className="w-4 h-4" /> Edit
-                    </button>
-                  )}
+                  <button
+                    onClick={() => openEditModal(evt)}
+                    className="px-3 py-1 bg-yellow-500 text-white text-xs rounded flex items-center gap-1"
+                  >
+                    <PencilSquareIcon className="w-4 h-4" /> Edit
+                  </button>
                   {role === "SUPER_ADMIN" && (
                     <button
                       onClick={() => {
@@ -325,7 +316,6 @@ const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Modals */}
       {showCreateModal && (
         <Modal
           title="Create Event"
@@ -355,50 +345,14 @@ const AdminDashboard: React.FC = () => {
           managers={managers}
         />
       )}
-
-      {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded shadow-md w-full max-w-sm">
-            <h3 className="text-lg font-semibold mb-4">Confirm Delete</h3>
-            <p className="text-sm text-gray-600 mb-6">
-              Are you sure you want to delete this event? This action cannot be undone.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowDeleteModal(false)} className="px-3 py-1 bg-gray-300 rounded">
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteEvent}
-                className="px-3 py-1 bg-red-600 text-white rounded"
-                disabled={loading}
-              >
-                {loading ? "Deleting..." : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
 /* ============================
-   Reusable Modal Component
+   Modal Component
    ============================ */
-interface ModalProps {
-  title: string;
-  formData: EventFormData;
-  setFormData: React.Dispatch<React.SetStateAction<EventFormData>>;
-  photoPreview: string | null;
-  handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onClose: () => void;
-  onSave: () => void;
-  loading: boolean;
-  categories: any[];
-  managers: any[];
-}
-
-const Modal: React.FC<ModalProps> = ({
+const Modal: React.FC<any> = ({
   title,
   formData,
   setFormData,
@@ -409,145 +363,183 @@ const Modal: React.FC<ModalProps> = ({
   loading,
   categories,
   managers,
-}) => (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-    <div className="bg-white p-6 rounded shadow-lg w-full max-w-2xl overflow-y-auto max-h-[90vh]">
-      <h2 className="text-2xl font-semibold mb-6 text-center">{title}</h2>
+}) => {
+  // ✅ Check if selected category is sports
+  const selectedCategory = categories.find((c: any) => c.id === formData.categoryId);
+  const isSports = selectedCategory?.name?.toLowerCase().includes("sport");
 
-      <div className="space-y-5">
-        {/* Title */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-          <input
-            type="text"
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            className="w-full border rounded p-2"
-          />
-        </div>
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded shadow-lg w-full max-w-2xl overflow-y-auto max-h-[90vh]">
+        <h2 className="text-2xl font-semibold mb-6 text-center">{title}</h2>
 
-        {/* Description */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-          <textarea
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            className="w-full border rounded p-2"
-            rows={3}
-          />
-        </div>
-
-        {/* Dates */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-5">
+          {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
-            <input
-              type="datetime-local"
-              value={formData.startDate || ""}
-              onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-              className="w-full border rounded p-2"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">End Date *</label>
-            <input
-              type="datetime-local"
-              value={formData.endDate || ""}
-              onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-              className="w-full border rounded p-2"
-            />
-          </div>
-        </div>
-
-        {/* Location + Capacity */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Location *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
             <input
               type="text"
-              value={formData.location}
-              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               className="w-full border rounded p-2"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
-            <input
-              type="number"
-              value={formData.capacity || ""}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  capacity: e.target.value ? Number(e.target.value) : undefined,
-                })
-              }
-              className="w-full border rounded p-2"
-            />
-          </div>
-        </div>
 
-        {/* Photo */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Photo</label>
-          {photoPreview && (
-            <div className="mb-2">
-              <img src={photoPreview} alt="Preview" className="h-32 object-cover rounded" />
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="w-full border rounded p-2"
+              rows={3}
+            />
+          </div>
+
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
+              <input
+                type="datetime-local"
+                value={formData.startDate || ""}
+                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                className="w-full border rounded p-2"
+              />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">End Date *</label>
+              <input
+                type="datetime-local"
+                value={formData.endDate || ""}
+                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                className="w-full border rounded p-2"
+              />
+            </div>
+          </div>
+
+          {/* Category & Manager */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+              <select
+                value={formData.categoryId || ""}
+                onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                className="border rounded p-2 w-full"
+              >
+                <option value="">Select Category</option>
+                {categories.map((c: any) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Manager</label>
+              <select
+                value={formData.managerId || ""}
+                onChange={(e) => setFormData({ ...formData, managerId: e.target.value })}
+                className="border rounded p-2 w-full"
+              >
+                <option value="">Select Manager</option>
+                {managers.map((m: any) => (
+                  <option key={m.id} value={m.id}>
+                    {m.profile?.firstName || m.firstName}{" "}
+                    {m.profile?.lastName || m.lastName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* ✅ Registration Fields (only if sports) */}
+          {isSports && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Registration Mode
+                </label>
+                <div className="flex items-center gap-4">
+                  {["individual", "team", "both"].map((mode) => (
+                    <label key={mode} className="flex items-center gap-1">
+                      <input
+                        type="radio"
+                        name="registrationMode"
+                        value={mode}
+                        checked={formData.registrationMode === mode}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            registrationMode: e.target.value as any,
+                          })
+                        }
+                      />
+                      <span className="capitalize">{mode}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {(formData.registrationMode === "team" ||
+                formData.registrationMode === "both") && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Team Member Slots
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={formData.teamMemberSlots || ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        teamMemberSlots: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
+                      })
+                    }
+                    className="w-full border rounded p-2"
+                    placeholder="Number of members per team"
+                  />
+                </div>
+              )}
+            </>
           )}
-          <input type="file" accept="image/*" onChange={handleFileChange} />
-        </div>
 
-        {/* Category & Manager */}
-        <div className="grid grid-cols-2 gap-4">
+          {/* Photo */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-            <select
-              value={formData.categoryId || ""}
-              onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-              className="border rounded p-2 w-full"
-            >
-              <option value="">Select Category</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Manager</label>
-            <select
-              value={formData.managerId || ""}
-              onChange={(e) => setFormData({ ...formData, managerId: e.target.value })}
-              className="border rounded p-2 w-full"
-            >
-              <option value="">Select Manager</option>
-              {managers.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.profile?.firstName || m.firstName} {m.profile?.lastName || m.lastName}
-                </option>
-              ))}
-            </select>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Photo</label>
+            {photoPreview && (
+              <div className="mb-2">
+                <img
+                  src={photoPreview}
+                  alt="Preview"
+                  className="h-32 object-cover rounded"
+                />
+              </div>
+            )}
+            <input type="file" accept="image/*" onChange={handleFileChange} />
           </div>
         </div>
-      </div>
 
-      {/* Buttons */}
-      <div className="flex justify-end mt-6 gap-3">
-        <button onClick={onClose} className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
-          Cancel
-        </button>
-        <button
-          onClick={onSave}
-          disabled={loading}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60"
-        >
-          {loading ? "Saving..." : "Save"}
-        </button>
+        {/* Buttons */}
+        <div className="flex justify-end mt-6 gap-3">
+          <button onClick={onClose} className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
+            Cancel
+          </button>
+          <button
+            onClick={onSave}
+            disabled={loading}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60"
+          >
+            {loading ? "Saving..." : "Save"}
+          </button>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default AdminDashboard;
