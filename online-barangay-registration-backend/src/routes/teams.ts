@@ -1,27 +1,20 @@
 // src/routes/teams.ts
 import { Router } from "express";
-import * as teamsController from "../controllers/teams";
 import { authenticateToken, authorize } from "../middleware/auth";
+import * as teamController from "../controllers/teams";
 
 const router = Router();
 
-/**
- * Create team (authenticated users)
- * Body: { eventId, name, members: [profileId1, profileId2...], customFieldResponses? }
- * The authenticated user's profile must be included in members (be captain).
- */
-router.post("/", authenticateToken, teamsController.createTeam);
+// Create a new team (Captain)
+router.post("/", authenticateToken, authorize("RESIDENT", "STAFF"), teamController.createTeam);
 
-/**
- * List teams for an event - admin / event manager / staff
- */
-router.get("/:eventId", authenticateToken, authorize("SUPER_ADMIN", "EVENT_MANAGER", "STAFF"), teamsController.listTeamsForEvent);
+// Verify team OTP
+router.post("/verify", authenticateToken, authorize("RESIDENT", "STAFF"), teamController.verifyTeamOTP);
 
-/**
- * Add members to existing team
- * Body: { members: [profileId1, profileId2...] }
- * Only captain or SUPER_ADMIN can call
- */
-router.post("/:teamId/members", authenticateToken, teamsController.addTeamMembers);
+// Add a member to team
+router.post("/add-member", authenticateToken, authorize("RESIDENT", "STAFF"), teamController.addTeamMember);
+
+// List all teams for an event
+router.get("/event/:eventId", authenticateToken, authorize("SUPER_ADMIN", "EVENT_MANAGER", "STAFF"), teamController.listTeamsForEvent);
 
 export default router;
