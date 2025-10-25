@@ -72,19 +72,6 @@ router.post(
   registrationsController.approveOrRejectRegistration
 );
 
-/**
- * ======================================================
- * Check-In (QR-based)
- * ======================================================
- * Super Admins, Event Managers, and Staff can check in,
- * but Managers and Staff are restricted to their assigned events.
- */
-router.post(
-  "/:id/checkin",
-  authenticateToken,
-  authorize("SUPER_ADMIN", "EVENT_MANAGER", "STAFF"),
-  restrictToAssignedEvents, // ✅ ensures event assignment matches
-  registrationsController.markCheckin
-);
+
 
 export default router;

@@ -257,3 +257,195 @@ export const listRegistrations = async (req: Request, res: Response, next: NextF
     next(error);
   }
 };
+
+/* ======================================================
+ * GET /events/:eventId/registrants — Event-specific view
+ * Includes photo, contact info, age, address, QR code
+ * ====================================================== */
+export const listRegistrantsForEvent = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { eventId } = req.params;
+    const user = (req as any).user;
+
+    // ✅ Authorization: Event Managers can only access their own events
+    if (user?.role === "EVENT_MANAGER") {
+      const event = await prisma.event.findUnique({
+        where: { id: eventId },
+        select: { managerId: true },
+      });
+
+      if (!event || event.managerId !== user.id) {
+        throw new AppError(
+          "Forbidden: You can only view registrants for your assigned events.",
+          403
+        );
+      }
+    }
+
+    // ✅ Pagination and filtering
+    const page = Number(req.query.page ?? 1);
+    const limit = Number(req.query.limit ?? 50);
+    const status = (req.query.status as string)?.toUpperCase() || "ALL";
+    const offset = (page - 1) * limit;
+
+    const whereClause: any = { eventId };
+    if (status !== "ALL") whereClause.status = status;
+
+    // ✅ Fetch registrations
+    const [rows, total] = await Promise.all([
+      prisma.registration.findMany({
+        where: whereClause,
+        include: {
+          profile: {
+            select: {
+              firstName: true,
+              lastName: true,
+              barangay: true,
+              contact: true,
+              age: true,
+              address: true,
+            },
+          },
+          event: { select: { title: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: offset,
+        take: limit,
+      }),
+      prisma.registration.count({ where: whereClause }),
+    ]);
+
+    // ✅ Format and merge custom values
+    const result = rows.map((r) => {
+      let customVals: Record<string, any> = {};
+
+      if (typeof r.customValues === "string") {
+        try {
+          customVals = JSON.parse(r.customValues);
+        } catch {
+          customVals = {};
+        }
+      } else if (
+        r.customValues &&
+        typeof r.customValues === "object" &&
+        !Array.isArray(r.customValues)
+      ) {
+        customVals = r.customValues as Record<string, any>;
+      }
+
+      return {
+        id: r.id,
+        status: r.status,
+        createdAt: r.createdAt,
+        eventId: r.eventId,
+        eventTitle: r.event?.title || null,
+        profile: r.profile
+          ? {
+              firstName: r.profile.firstName,
+              lastName: r.profile.lastName,
+              contact: r.profile.contact || customVals.contact || null,
+              age: r.profile.age || customVals.age || null,
+              address: r.profile.address || customVals.address || null,
+              barangay: r.profile.barangay || customVals.barangay || null,
+            }
+          : {
+              firstName: customVals.firstName || null,
+              lastName: customVals.lastName || null,
+              contact: customVals.contact || null,
+              age: customVals.age || null,
+              address: customVals.address || null,
+              barangay: customVals.barangay || null,
+            },
+        photoPath: r.photoPath || customVals.photo || null,
+        qrCodeUrl: customVals.qrCodeUrl || customVals.qr || null,
+        customValues: customVals,
+      };
+    });
+
+    res.json({
+      success: true,
+      data: result,
+      pagination: { page, limit, total },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/* ======================================================
+ * GET /registrations/:id — View single registration
+ * ====================================================== */
+export const getRegistration = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const registration = await prisma.registration.findUnique({
+      where: { id },
+      include: {
+        event: true,
+        profile: { select: { firstName: true, lastName: true, barangay: true } },
+      },
+    });
+    if (!registration) throw new AppError("Registration not found", 404);
+    return res.json({ success: true, data: registration });
+  } catch (err) {
+    next(err);
+    return;
+  }
+};
+
+/* ======================================================
+ * POST /registrations/:id/approval — Approve or Reject
+ * ====================================================== */
+export const approveOrRejectRegistration = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const normalized = (status || "").toLowerCase();
+
+    if (!["approved", "rejected"].includes(normalized)) {
+      throw new AppError("Invalid status. Must be 'approved' or 'rejected'.", 400);
+    }
+
+    const registration = await prisma.registration.findUnique({
+      where: { id },
+      select: { id: true, eventId: true, status: true },
+    });
+    if (!registration) throw new AppError("Registration not found.", 404);
+
+    const updated = await prisma.registration.update({
+      where: { id },
+      data: { status: normalized.toUpperCase() },
+    });
+
+    return res.json({
+      success: true,
+      message: `Registration ${normalized}`,
+      data: updated,
+    });
+  } catch (err) {
+    next(err);
+    return;
+  }
+};
+
+/* ======================================================
+ * POST /registrations/:id/checkin — Mark attendance
+ * ====================================================== */
+export const markCheckin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const updated = await prisma.registration.update({
+      where: { id },
+      data: { updatedAt: new Date() },
+    });
+    return res.json({ success: true, message: "Checked in", data: updated });
+  } catch (err) {
+    next(err);
+    return;
+  }
+};
+
