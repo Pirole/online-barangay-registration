@@ -4,6 +4,8 @@ import * as eventsController from "../controllers/events";
 import * as registrationsController from "../controllers/registrations";
 import { authenticateToken, authorize, optionalAuth } from "../middleware/auth";
 import { uploadEventPhoto } from "../config/multer";
+import { validateRequest } from "../middleware/validateRequest";
+import { createEventSchema } from "../validators/eventValidators";
 
 const router = Router();
 
@@ -19,9 +21,11 @@ router.post(
   "/",
   authenticateToken,
   authorize("SUPER_ADMIN"),
-  uploadEventPhoto.single("photo"),
+  uploadEventPhoto.single("photo"), // ✅ parse multipart/form-data first
+  validateRequest(createEventSchema), // ✅ now req.body exists
   eventsController.createEvent
 );
+
 
 /**
  * 🔹 Public: List all events
@@ -98,7 +102,6 @@ router.delete(
   eventsController.deleteCustomField
 );
 
-/* -------------------------------------------------------------------------- */
 /* 🧍‍♂️ REGISTRANT ROUTES                                                    */
 /* -------------------------------------------------------------------------- */
 

@@ -16,6 +16,7 @@ import registrationRoutes from "./routes/registrations";
 import { logger } from "./utils/logger";
 import { connectDatabase } from "./config/database";
 import eventRoutes from "./routes/events";
+
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { requestLogger } from "./middleware/requestLogger";
 import eventManagerRoutes from "./routes/eventManagerRoutes";
@@ -35,7 +36,7 @@ const API_VERSION = process.env.API_VERSION || "v1";
 app.use(
   helmet({
     crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: false, // ✅ Add this line
+    crossOriginResourcePolicy: false,
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
@@ -47,8 +48,6 @@ app.use(
     },
   })
 );
-
-
 
 app.use(
   cors({
@@ -70,11 +69,16 @@ if (!isDev) {
 } else {
   logger.info("🧪 Rate limiter disabled in development mode");
 }
-app.use(`/api/${API_VERSION}/events`, eventRoutes);
+
+// ✅ MOVE THESE ABOVE ROUTES
 app.use(compression());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(requestLogger);
+
+// ✅ ROUTES SHOULD COME AFTER PARSERS
+app.use(`/api/${API_VERSION}/events`, eventRoutes);
+
 
 
 // ================================================

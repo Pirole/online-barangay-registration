@@ -188,6 +188,7 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
         });
       }
 
+
       await tx.auditLog.create({
         data: {
           actorId: actor.id,
