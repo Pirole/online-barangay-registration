@@ -12,6 +12,7 @@ import {
   CalendarDaysIcon,
   PlusIcon,
 } from "@heroicons/react/24/solid";
+import AdminLayout from "../../layouts/AdminLayout";
 
 /* ============================
    Type Definitions
@@ -47,10 +48,11 @@ interface EventFormData {
   ageMax?: number;
   categoryId?: string;
   managerId?: string;
-  photo?: File | null;
   registrationMode?: "individual" | "team" | "both";
   teamMemberSlots?: number;
+  photo?: File | null;
 }
+
 
 /* ============================
    Component
@@ -80,6 +82,9 @@ const AdminDashboard: React.FC = () => {
     location: "",
     startDate: "",
     endDate: "",
+    capacity: undefined,
+    ageMin: undefined,
+    ageMax: undefined,
     categoryId: "",
     managerId: "",
     photo: null,
@@ -93,7 +98,6 @@ const AdminDashboard: React.FC = () => {
      ============================ */
   useEffect(() => {
     if (!token) return;
-
     const fetchEvents = async () => {
       setLoading(true);
       try {
@@ -106,7 +110,6 @@ const AdminDashboard: React.FC = () => {
         setLoading(false);
       }
     };
-
     fetchEvents();
   }, [token, refreshKey]);
 
@@ -146,16 +149,41 @@ const AdminDashboard: React.FC = () => {
     try {
       setLoading(true);
       const data = new FormData();
-      Object.entries(formData).forEach(([k, v]) => {
-        if (v !== undefined && v !== null) data.append(k, String(v));
-      });
+
+      // Ensure all string fields exist
+      data.append("title", formData.title || "");
+      data.append("description", formData.description || "");
+      data.append("location", formData.location || "");
+      data.append("startDate", formData.startDate || "");
+      data.append("endDate", formData.endDate || "");
+      data.append("categoryId", formData.categoryId || "");
+      data.append("managerId", formData.managerId || "");
+
+      // Convert number fields properly
+      if (formData.capacity !== undefined && formData.capacity !== null)
+        data.append("capacity", String(formData.capacity));
+
+      if (formData.ageMin !== undefined && formData.ageMin !== null)
+        data.append("ageMin", String(formData.ageMin));
+
+      if (formData.ageMax !== undefined && formData.ageMax !== null)
+        data.append("ageMax", String(formData.ageMax));
+
+      if (formData.teamMemberSlots !== undefined && formData.teamMemberSlots !== null)
+        data.append("teamMemberSlots", String(formData.teamMemberSlots));
+
+      if (formData.registrationMode)
+        data.append("registrationMode", formData.registrationMode);
+
+      // Photo (optional)
       if (formData.photo) data.append("photo", formData.photo);
 
       await apiFetch("/events", { method: "POST", body: data }, token);
-      toast.success("Event created successfully!");
+      toast.success("✅ Event created successfully!");
       setShowCreateModal(false);
       refresh();
     } catch (err: any) {
+      console.error("❌ Event creation failed:", err);
       toast.error(err.message || "Failed to create event");
     } finally {
       setLoading(false);
@@ -168,12 +196,8 @@ const AdminDashboard: React.FC = () => {
       title: evt.title,
       description: evt.description,
       location: evt.location,
-      startDate: evt.start_date
-        ? new Date(evt.start_date).toISOString().slice(0, 16)
-        : "",
-      endDate: evt.end_date
-        ? new Date(evt.end_date).toISOString().slice(0, 16)
-        : "",
+      startDate: evt.start_date ? new Date(evt.start_date).toISOString().slice(0, 16) : "",
+      endDate: evt.end_date ? new Date(evt.end_date).toISOString().slice(0, 16) : "",
       capacity: evt.capacity,
       ageMin: evt.age_min,
       ageMax: evt.age_max,
@@ -181,7 +205,7 @@ const AdminDashboard: React.FC = () => {
       managerId: evt.manager_id,
       photo: null,
       registrationMode: (evt.registration_mode as any) || "individual",
-      teamMemberSlots: evt.team_member_slots || 1,
+      teamMemberSlots: evt.team_member_slots ?? 1,
     });
     setPhotoPreview(evt.photo_path ? `http://localhost:5000${evt.photo_path}` : null);
     setShowEditModal(true);
@@ -192,16 +216,33 @@ const AdminDashboard: React.FC = () => {
     try {
       setLoading(true);
       const data = new FormData();
-      Object.entries(formData).forEach(([k, v]) => {
-        if (v !== undefined && v !== null) data.append(k, String(v));
-      });
+      if (formData.title) data.append("title", formData.title);
+      if (formData.description) data.append("description", formData.description || "");
+      if (formData.location) data.append("location", formData.location);
+      data.append("endDate", formData.endDate || "");
+      data.append("startDate", formData.startDate || "");
+
+      if (formData.capacity !== undefined && formData.capacity !== null)
+        data.append("capacity", String(formData.capacity));
+      if (formData.ageMin !== undefined && formData.ageMin !== null)
+        data.append("ageMin", String(formData.ageMin));
+      if (formData.ageMax !== undefined && formData.ageMax !== null)
+        data.append("ageMax", String(formData.ageMax));
+      if (formData.categoryId) data.append("categoryId", formData.categoryId);
+      if (formData.managerId) data.append("managerId", formData.managerId);
+      if (formData.registrationMode) data.append("registrationMode", formData.registrationMode);
+      if (formData.teamMemberSlots !== undefined && formData.teamMemberSlots !== null)
+        data.append("teamMemberSlots", Number(formData.teamMemberSlots).toString());
+
       if (formData.photo) data.append("photo", formData.photo);
 
-      await apiFetch(`/events/${selectedEvent.id}`, { method: "PUT", body: data }, token);
+      // Use PATCH to match the server route that expects patch
+      await apiFetch(`/events/${selectedEvent.id}`, { method: "PATCH", body: data }, token);
       toast.success("Event updated successfully!");
       setShowEditModal(false);
       refresh();
     } catch (err: any) {
+      console.error(err);
       toast.error(err.message || "Failed to update event");
     } finally {
       setLoading(false);
@@ -217,142 +258,193 @@ const AdminDashboard: React.FC = () => {
       setShowDeleteModal(false);
       refresh();
     } catch (err: any) {
+      console.error(err);
       toast.error(err.message || "Failed to delete event");
     } finally {
       setLoading(false);
     }
   };
 
+  /* ============================
+     Render
+     ============================ */
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex items-center gap-2 mb-6">
-        <h1 className="text-2xl font-semibold flex-1">Admin Dashboard</h1>
-        <button onClick={refresh} className="px-3 py-1 bg-blue-600 text-white rounded">
-          Refresh
-        </button>
-        {role === "SUPER_ADMIN" && (
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-3 py-1 bg-green-600 text-white rounded flex items-center gap-1"
-          >
-            <PlusIcon className="w-4 h-4" /> Create Event
+    
+      <div className="p-6 max-w-7xl mx-auto">
+        <div className="flex items-center gap-2 mb-6">
+          <h1 className="text-2xl font-semibold flex-1">Admin Dashboard</h1>
+          <button onClick={refresh} className="px-3 py-1 bg-blue-600 text-white rounded">
+            Refresh
           </button>
-        )}
-        <button onClick={handleLogout} className="px-3 py-1 bg-gray-600 text-white rounded">
-          Logout
-        </button>
-      </div>
-
-      {/* Grid */}
-      {loading ? (
-        <div className="text-center text-gray-500 py-10">Loading events...</div>
-      ) : events.length === 0 ? (
-        <div className="text-center text-gray-500 py-10">No events found.</div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {events.map((evt) => (
-            <div
-              key={evt.id}
-              className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+          {role === "SUPER_ADMIN" && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-3 py-1 bg-green-600 text-white rounded flex items-center gap-1"
             >
-              {evt.photo_path ? (
-                <img
-                  src={`http://localhost:5000${evt.photo_path}`}
-                  alt={evt.title}
-                  className="h-48 w-full object-cover"
-                />
-              ) : (
-                <div className="h-48 w-full bg-gray-200 flex items-center justify-center text-gray-400 text-sm">
-                  No Image
-                </div>
-              )}
-              <div className="p-4 space-y-2">
-                <h3 className="text-lg font-semibold text-gray-900">{evt.title}</h3>
-                <p className="text-sm text-gray-600 line-clamp-2">{evt.description}</p>
+              <PlusIcon className="w-4 h-4" /> Create Event
+            </button>
+          )}
+          <button onClick={handleLogout} className="px-3 py-1 bg-gray-600 text-white rounded">
+            Logout
+          </button>
+        </div>
 
-                <div className="text-xs text-gray-500 flex items-center gap-1 mt-2">
-                  <CalendarDaysIcon className="w-4 h-4" />
-                  {evt.start_date
-                    ? new Date(evt.start_date).toLocaleDateString()
-                    : "No start date"}
-                </div>
-                <div className="text-xs text-gray-500 flex items-center gap-1">
-                  <MapPinIcon className="w-4 h-4" /> {evt.location || "No location"}
-                </div>
-                <div className="text-xs text-gray-500 flex items-center gap-1">
-                  <UserGroupIcon className="w-4 h-4" />{" "}
-                  {evt.registrant_count ?? 0} registrants
-                </div>
+        {/* Events Grid */}
+        {loading ? (
+          <div className="text-center text-gray-500 py-10">Loading events...</div>
+        ) : events.length === 0 ? (
+          <div className="text-center text-gray-500 py-10">No events found.</div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {events.map((evt) => (
+              <div
+                key={evt.id}
+                className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+              >
+                {evt.photo_path ? (
+                  <img
+                    src={`http://localhost:5000${evt.photo_path}`}
+                    alt={evt.title}
+                    className="h-48 w-full object-cover"
+                  />
+                ) : (
+                  <div className="h-48 w-full bg-gray-200 flex items-center justify-center text-gray-400 text-sm">
+                    No Image
+                  </div>
+                )}
 
-                {/* Actions */}
-                <div className="flex justify-end gap-2 mt-3">
-                  <button
-                    onClick={() => navigate(`/admin/events/${evt.id}/registrants`)}
-                    className="px-3 py-1 bg-blue-600 text-white text-xs rounded"
-                  >
-                    View
-                  </button>
-                  <button
-                    onClick={() => openEditModal(evt)}
-                    className="px-3 py-1 bg-yellow-500 text-white text-xs rounded flex items-center gap-1"
-                  >
-                    <PencilSquareIcon className="w-4 h-4" /> Edit
-                  </button>
-                  {role === "SUPER_ADMIN" && (
+                <div className="p-4 space-y-2">
+                  <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">{evt.title}</h3>
+                  <p className="text-sm text-gray-600 line-clamp-2">{evt.description}</p>
+
+                  <div className="text-xs text-gray-500 flex items-center gap-1 mt-2">
+                    <CalendarDaysIcon className="w-4 h-4" />
+                    {evt.start_date ? new Date(evt.start_date).toLocaleDateString() : "No start date"}
+                  </div>
+
+                  <div className="text-xs text-gray-500 flex items-center gap-1">
+                    <MapPinIcon className="w-4 h-4" />
+                    {evt.location || "No location"}
+                  </div>
+
+                  <div className="text-xs text-gray-500 flex items-center gap-1">
+                    <UserGroupIcon className="w-4 h-4" />
+                    {evt.registrant_count ?? 0} registrants
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex justify-end gap-2 mt-3">
                     <button
-                      onClick={() => {
-                        setDeleteTargetId(evt.id);
-                        setShowDeleteModal(true);
-                      }}
-                      className="px-3 py-1 bg-red-600 text-white text-xs rounded flex items-center gap-1"
+                      onClick={() => navigate(`/admin/events/${evt.id}/registrants`)}
+                      className="px-3 py-1 bg-blue-600 text-white text-xs rounded"
                     >
-                      <TrashIcon className="w-4 h-4" /> Delete
+                      View
                     </button>
-                  )}
+
+                    {(role === "SUPER_ADMIN" || (role === "EVENT_MANAGER" && evt.manager_id === user?.id)) && (
+                      <button
+                        onClick={() => openEditModal(evt)}
+                        className="px-3 py-1 bg-yellow-500 text-white text-xs rounded flex items-center gap-1"
+                      >
+                        <PencilSquareIcon className="w-4 h-4" /> Edit
+                      </button>
+                    )}
+
+                    {role === "SUPER_ADMIN" && (
+                      <button
+                        onClick={() => {
+                          setDeleteTargetId(evt.id);
+                          setShowDeleteModal(true);
+                        }}
+                        className="px-3 py-1 bg-red-600 text-white text-xs rounded flex items-center gap-1"
+                      >
+                        <TrashIcon className="w-4 h-4" /> Delete
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
+            ))}
+          </div>
+        )}
+
+        {/* Create Modal */}
+        {showCreateModal && (
+          <Modal
+            title="Create Event"
+            formData={formData}
+            setFormData={setFormData}
+            photoPreview={photoPreview}
+            handleFileChange={handleFileChange}
+            onClose={() => setShowCreateModal(false)}
+            onSave={handleCreateEvent}
+            loading={loading}
+            categories={categories}
+            managers={managers}
+          />
+        )}
+
+        {/* Edit Modal */}
+        {showEditModal && (
+          <Modal
+            title="Edit Event"
+            formData={formData}
+            setFormData={setFormData}
+            photoPreview={photoPreview}
+            handleFileChange={handleFileChange}
+            onClose={() => setShowEditModal(false)}
+            onSave={handleUpdateEvent}
+            loading={loading}
+            categories={categories}
+            managers={managers}
+          />
+        )}
+
+        {/* Delete Confirmation */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded shadow-md w-full max-w-sm">
+              <h3 className="text-lg font-semibold mb-4">Confirm Delete</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                Are you sure you want to delete this event? This action cannot be undone.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setShowDeleteModal(false)} className="px-3 py-1 bg-gray-300 rounded">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteEvent}
+                  className="px-3 py-1 bg-red-600 text-white rounded"
+                  disabled={loading}
+                >
+                  {loading ? "Deleting..." : "Delete"}
+                </button>
+              </div>
             </div>
-          ))}
-        </div>
-      )}
-
-      {showCreateModal && (
-        <Modal
-          title="Create Event"
-          formData={formData}
-          setFormData={setFormData}
-          photoPreview={photoPreview}
-          handleFileChange={handleFileChange}
-          onClose={() => setShowCreateModal(false)}
-          onSave={handleCreateEvent}
-          loading={loading}
-          categories={categories}
-          managers={managers}
-        />
-      )}
-
-      {showEditModal && (
-        <Modal
-          title="Edit Event"
-          formData={formData}
-          setFormData={setFormData}
-          photoPreview={photoPreview}
-          handleFileChange={handleFileChange}
-          onClose={() => setShowEditModal(false)}
-          onSave={handleUpdateEvent}
-          loading={loading}
-          categories={categories}
-          managers={managers}
-        />
-      )}
-    </div>
+          </div>
+        )}
+      </div>
+   
   );
 };
 
 /* ============================
    Modal Component
    ============================ */
-const Modal: React.FC<any> = ({
+interface ModalProps {
+  title: string;
+  formData: EventFormData;
+  setFormData: React.Dispatch<React.SetStateAction<EventFormData>>;
+  photoPreview: string | null;
+  handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onClose: () => void;
+  onSave: () => void;
+  loading: boolean;
+  categories: any[];
+  managers: any[];
+}
+
+const Modal: React.FC<ModalProps> = ({
   title,
   formData,
   setFormData,
@@ -364,9 +456,10 @@ const Modal: React.FC<any> = ({
   categories,
   managers,
 }) => {
-  // ✅ Check if selected category is sports
-  const selectedCategory = categories.find((c: any) => c.id === formData.categoryId);
-  const isSports = selectedCategory?.name?.toLowerCase().includes("sport");
+  // find selected category object
+  const selectedCategory = categories.find((c) => c.id === formData.categoryId);
+  // basic heuristic: show registration options only for categories whose name includes "sport"
+  const isSports = !!(selectedCategory?.name && String(selectedCategory.name).toLowerCase().includes("sport"));
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -389,7 +482,7 @@ const Modal: React.FC<any> = ({
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
             <textarea
-              value={formData.description}
+              value={formData.description || ""}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="w-full border rounded p-2"
               rows={3}
@@ -418,6 +511,56 @@ const Modal: React.FC<any> = ({
             </div>
           </div>
 
+          {/* Location + Capacity */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Location *</label>
+              <input
+                type="text"
+                value={formData.location || ""}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                className="w-full border rounded p-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
+              <input
+                type="number"
+                value={formData.capacity ?? ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, capacity: e.target.value ? Number(e.target.value) : undefined })
+                }
+                className="w-full border rounded p-2"
+              />
+            </div>
+          </div>
+
+          {/* Age min/max */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Age</label>
+              <input
+                type="number"
+                value={formData.ageMin ?? ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, ageMin: e.target.value ? Number(e.target.value) : undefined })
+                }
+                className="w-full border rounded p-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Maximum Age</label>
+              <input
+                type="number"
+                value={formData.ageMax ?? ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, ageMax: e.target.value ? Number(e.target.value) : undefined })
+                }
+                className="w-full border rounded p-2"
+              />
+            </div>
+          </div>
+
           {/* Category & Manager */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -428,7 +571,7 @@ const Modal: React.FC<any> = ({
                 className="border rounded p-2 w-full"
               >
                 <option value="">Select Category</option>
-                {categories.map((c: any) => (
+                {categories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>
@@ -444,37 +587,29 @@ const Modal: React.FC<any> = ({
                 className="border rounded p-2 w-full"
               >
                 <option value="">Select Manager</option>
-                {managers.map((m: any) => (
+                {managers.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.profile?.firstName || m.firstName}{" "}
-                    {m.profile?.lastName || m.lastName}
+                    {m.profile?.firstName || m.firstName} {m.profile?.lastName || m.lastName}
                   </option>
                 ))}
               </select>
             </div>
           </div>
 
-          {/* ✅ Registration Fields (only if sports) */}
+          {/* Conditional: Registration options only when category is Sports */}
           {isSports && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Registration Mode
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Registration Mode</label>
                 <div className="flex items-center gap-4">
-                  {["individual", "team", "both"].map((mode) => (
-                    <label key={mode} className="flex items-center gap-1">
+                  {(["individual", "team", "both"] as const).map((mode) => (
+                    <label key={mode} className="flex items-center gap-2">
                       <input
                         type="radio"
                         name="registrationMode"
                         value={mode}
                         checked={formData.registrationMode === mode}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            registrationMode: e.target.value as any,
-                          })
-                        }
+                        onChange={(e) => setFormData({ ...formData, registrationMode: e.target.value as any })}
                       />
                       <span className="capitalize">{mode}</span>
                     </label>
@@ -482,23 +617,15 @@ const Modal: React.FC<any> = ({
                 </div>
               </div>
 
-              {(formData.registrationMode === "team" ||
-                formData.registrationMode === "both") && (
+              {(formData.registrationMode === "team" || formData.registrationMode === "both") && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Team Member Slots
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Team Member Slots</label>
                   <input
                     type="number"
                     min={1}
-                    value={formData.teamMemberSlots || ""}
+                    value={formData.teamMemberSlots ?? ""}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        teamMemberSlots: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
+                      setFormData({ ...formData, teamMemberSlots: e.target.value ? Number(e.target.value) : undefined })
                     }
                     className="w-full border rounded p-2"
                     placeholder="Number of members per team"
@@ -513,11 +640,7 @@ const Modal: React.FC<any> = ({
             <label className="block text-sm font-medium text-gray-700 mb-1">Photo</label>
             {photoPreview && (
               <div className="mb-2">
-                <img
-                  src={photoPreview}
-                  alt="Preview"
-                  className="h-32 object-cover rounded"
-                />
+                <img src={photoPreview} alt="Preview" className="h-32 object-cover rounded" />
               </div>
             )}
             <input type="file" accept="image/*" onChange={handleFileChange} />
