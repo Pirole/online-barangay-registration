@@ -3,7 +3,7 @@ import { Calendar, MapPin, Users, Clock } from 'lucide-react';
 
 // Export the Event type so other components can use it
 export interface FrontendEvent {
-  id: string | number; // ✅ allow UUIDs from backend
+  id: string | number;
   title: string;
   description: string;
   date: string;
@@ -23,7 +23,12 @@ export interface FrontendEvent {
     required: boolean;
     options?: string[];
   }>;
+
+  /** 👇 Add these two new fields */
+  registrationMode?: 'individual' | 'team' | 'both'; // defines allowed registration types
+  teamMemberSlots?: number; // maximum number of members per team
 }
+
 
 interface EventCardProps {
   event: FrontendEvent;

@@ -250,39 +250,40 @@ export const EventProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   }, []);
 
-const registerForEvent = useCallback(async (
-  eventId: string,
-  formData: any
-): Promise<{ registrationId: string }> => {
-  const fd = new FormData();
-  fd.append("eventId", eventId);
-  fd.append(
-    "customValues",
-    JSON.stringify({
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      age: formData.age,
-      address: formData.address,
-      barangay: formData.barangay,
-      phone: formData.phone,
-    })
-  );
+const registerForEvent = async (eventId: string, formData: any) => {
+  const backendBase = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
+  const form = new FormData();
+  form.append("eventId", eventId);
+
+  // Append text fields safely
+  Object.entries(formData).forEach(([key, value]) => {
+    if (key === "photo") return; // skip photo for now
+    if (Array.isArray(value)) {
+      form.append(key, JSON.stringify(value));
+    } else if (value !== undefined && value !== null) {
+      form.append(key, String(value));
+    }
+  });
+
+  // Append photo as real File
   if (formData.photo) {
-    const byteString = atob(formData.photo.split(",")[1]);
-    const mimeString = formData.photo.split(",")[0].split(":")[1].split(";")[0];
-    const ab = new ArrayBuffer(byteString.length);
-    const ia = new Uint8Array(ab);
-    for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-    const blob = new Blob([ab], { type: mimeString });
-    fd.append("photo", blob, "photo.jpg");
+    const blob = await (await fetch(formData.photo)).blob();
+    form.append("photo", new File([blob], "photo.jpg", { type: "image/jpeg" }));
   }
 
-  const response = await fetch(`${API_BASE}/registrations`, { method: "POST", body: fd });
-  if (!response.ok) throw new Error("Registration failed");
-  const data = await response.json();
-  return data.data as { registrationId: string };
-}, []);
+  const res = await fetch(`${backendBase}/api/v1/registrations`, {
+    method: "POST",
+    body: form,
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Failed to register: ${errText}`);
+  }
+
+  return res.json();
+};
 
 
   const approveRegistrant = useCallback(async (registrationId: string): Promise<void> => {
