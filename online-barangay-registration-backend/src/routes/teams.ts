@@ -9,7 +9,7 @@ const router = Router();
 router.post("/", authenticateToken, authorize("RESIDENT", "STAFF"), teamController.createTeam);
 
 // Verify team OTP
-router.post("/verify", authenticateToken, authorize("RESIDENT", "STAFF"), teamController.verifyTeamOTP);
+router.post("/verify-otp", authenticateToken, authorize("RESIDENT", "STAFF"), teamController.verifyTeamOTP);
 
 // Add a member to team
 router.post("/add-member", authenticateToken, authorize("RESIDENT", "STAFF"), teamController.addTeamMember);

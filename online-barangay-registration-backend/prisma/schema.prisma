@@ -115,8 +115,8 @@ model Event {
   photoPath     String?        @map("photo_path")
 
   // 🆕 New fields
-  registrationMode  String       @default("individual") // 'individual' | 'team' | 'both'
-  teamMemberSlots   Int?         @default(1)
+  registrationMode   String   @default("individual") @map("registration_mode")
+  teamMemberSlots    Int?     @default(1) @map("team_member_slots")
 
   customFields  CustomField[]
   category      EventCategory  @relation(fields: [categoryId], references: [id])
@@ -170,16 +170,14 @@ model Registration {
 
 
 model Team {
-  id        String   @id @default(uuid())
-  eventId   String   @map("event_id")
-  name      String
-  createdAt DateTime @default(now()) @map("created_at")
+  id                  String      @id @default(uuid())
+  eventId             String      @map("event_id")
+  name                String
+  captainRegistrationId String   @map("captain_registration_id") 
+  createdAt           DateTime    @default(now()) @map("created_at")
 
-  // Relations
-  event   Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  members TeamMember[]
-
-  @@map("teams")
+  event     Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  members   TeamMember[]
 }
 
 model TeamMember {

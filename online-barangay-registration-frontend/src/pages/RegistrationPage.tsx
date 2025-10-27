@@ -104,18 +104,23 @@ const RegistrationPage: React.FC = () => {
   const [photoTarget, setPhotoTarget] = useState<"individual" | "captain" | `member-${number}`>("individual");
 
   useEffect(() => {
-    if (eventId) fetchEventById(eventId);
-    // default mode if event has only individual or team
-    if (selectedEvent && !mode) {
-      // Note: our Event object shape may vary; check property name.
-      // Here we expect selectedEvent.registrationMode (string 'individual'|'team'|'both')
-      const rm: any = (selectedEvent as any).registrationMode;
-      if (rm === "individual") setMode("individual");
-      else if (rm === "team") setMode("team");
-      // if both, leave null so user chooses
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId, fetchEventById, selectedEvent]);
+  // Fetch event only if it's not already loaded or doesn't match the current ID
+  if (eventId && (!selectedEvent || selectedEvent.id !== eventId)) {
+    fetchEventById(eventId);
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [eventId]);
+
+// Separate effect for mode setup — runs only when selectedEvent updates
+useEffect(() => {
+  if (selectedEvent && !mode) {
+    const rm: any = (selectedEvent as any).registrationMode;
+    if (rm === "individual") setMode("individual");
+    else if (rm === "team") setMode("team");
+    // if both, leave null so user can choose manually
+  }
+}, [selectedEvent, mode]);
+
 
   /* ---------------- Validation ---------------- */
   const validateIndividual = (data: IndividualForm) => {

@@ -2,20 +2,22 @@
 import { Request, Response, NextFunction } from "express";
 import prisma from "../config/prisma";
 import { AppError } from "../middleware/errorHandler";
-import crypto from "crypto";
 import { logger } from "../utils/logger";
 import { sendSMS } from "../utils/sms";
 import { generateOTP, hashOTP, OTP_EXPIRY_MINUTES } from "../utils/otp";
 
 /* -------------------------------------------------------------------------- */
-/* 🧩 CREATE TEAM (Captain creates + OTP generation)                          */
+/* 🧩 CREATE TEAM (Captain registration already done via OTP)                 */
 /* -------------------------------------------------------------------------- */
 export const createTeam = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { eventId, name, captainProfileId, members = [] } = req.body;
+    const { eventId, name, captainRegistrationId, members = [] } = req.body;
 
-    if (!eventId || !name || !captainProfileId) {
-      throw new AppError("Missing required fields: eventId, name, captainProfileId", 400);
+    if (!eventId || !name || !captainRegistrationId) {
+      throw new AppError(
+        "Missing required fields: eventId, name, captainRegistrationId",
+        400
+      );
     }
 
     // ✅ Validate event
@@ -25,66 +27,57 @@ export const createTeam = async (req: Request, res: Response, next: NextFunction
       throw new AppError("This event does not allow team registrations", 400);
     }
 
-    // ✅ Create team with captain as first member
+    // ✅ Verify captain's registration
+    const registration = await prisma.registration.findUnique({
+      where: { id: captainRegistrationId },
+    });
+    if (!registration) throw new AppError("Captain registration not found", 404);
+    if (registration.eventId !== eventId) {
+      throw new AppError("Captain registration does not belong to this event", 400);
+    }
+    if (registration.status !== "APPROVED") {
+      throw new AppError("Captain must complete OTP verification before creating a team", 400);
+    }
+
+    // ✅ Create team linked to captain registration
     const team = await prisma.team.create({
       data: {
         eventId,
         name,
+        captainRegistrationId,
         members: {
-          create: [
-            {
-              profileId: captainProfileId,
-            },
-            // Add other members if provided
-            ...members
-              .filter((m: any) => m.profileId && m.profileId !== captainProfileId)
-              .map((m: any) => ({ profileId: m.profileId })),
-          ],
+          create: members
+            .filter((m: any) => !!m.profileId)
+            .map((m: any) => ({
+              profileId: m.profileId,
+            })),
         },
       },
-      include: { members: true },
-    });
-
-    // ✅ Generate OTP for captain verification
-    const otp = generateOTP();
-    const otpHash = hashOTP(otp);
-    const otpExpires = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
-
-    // ✅ Create registration for the captain
-    const registration = await prisma.registration.create({
-      data: {
-        eventId,
-        profileId: captainProfileId,
-        otpCodeHash: otpHash,
-        otpExpiresAt: otpExpires,
-        status: "PENDING",
+      include: {
+        members: {
+          include: {
+            profile: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                contact: true,
+                barangay: true,
+              },
+            },
+          },
+        },
       },
     });
 
-    // ✅ Send OTP to captain (if contact info available)
-    const captainProfile = await prisma.profile.findUnique({
-      where: { id: captainProfileId },
-    });
+    logger.info(
+      `✅ Team "${name}" created for event ${eventId} (captain registration ${captainRegistrationId})`
+    );
 
-    if (captainProfile?.contact) {
-      try {
-        await sendSMS(
-          captainProfile.contact,
-          `Your team registration OTP is ${otp}. It expires in ${OTP_EXPIRY_MINUTES} minutes.`
-        );
-        logger.info(`📩 OTP sent to ${captainProfile.contact}`);
-      } catch (err) {
-        logger.warn(`⚠️ Failed to send SMS to ${captainProfile.contact}: ${err}`);
-      }
-    } else {
-      logger.info(`ℹ️ Captain has no contact info. OTP: ${otp}`);
-    }
-
-    logger.info(`✅ Created team "${name}" for event ${eventId} (Captain ${captainProfileId})`);
     res.status(201).json({
       success: true,
-      message: "Team created successfully. OTP sent to captain.",
-      data: { team, otp }, // NOTE: Only visible in dev mode; hide in prod
+      message: "Team created successfully.",
+      data: { team },
     });
   } catch (err) {
     next(err);
@@ -92,20 +85,21 @@ export const createTeam = async (req: Request, res: Response, next: NextFunction
 };
 
 /* -------------------------------------------------------------------------- */
-/* 🔐 VERIFY TEAM OTP (Captain verification)                                  */
+/* 🔐 VERIFY CAPTAIN OTP (Registration-based)                                */
 /* -------------------------------------------------------------------------- */
 export const verifyTeamOTP = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { captainProfileId, otp } = req.body;
-    if (!captainProfileId || !otp)
-      throw new AppError("Missing required fields: captainProfileId, otp", 400);
+    const { captainRegistrationId, otp } = req.body;
+    if (!captainRegistrationId || !otp) {
+      throw new AppError("Missing required fields: captainRegistrationId, otp", 400);
+    }
 
-    const registration = await prisma.registration.findFirst({
-      where: { profileId: captainProfileId },
+    const registration = await prisma.registration.findUnique({
+      where: { id: captainRegistrationId },
     });
 
     if (!registration || !registration.otpCodeHash) {
-      throw new AppError("OTP not found. Please create a team first.", 404);
+      throw new AppError("OTP not found. Please register first.", 404);
     }
 
     if (registration.otpExpiresAt && registration.otpExpiresAt < new Date()) {
@@ -117,14 +111,14 @@ export const verifyTeamOTP = async (req: Request, res: Response, next: NextFunct
       throw new AppError("Invalid OTP", 400);
     }
 
-    // ✅ Clear OTP fields after successful verification
+    // ✅ Mark verified
     await prisma.registration.update({
-      where: { id: registration.id },
+      where: { id: captainRegistrationId },
       data: { otpCodeHash: null, otpExpiresAt: null, status: "APPROVED" },
     });
 
-    logger.info(`✅ Team captain verified successfully (${captainProfileId})`);
-    res.json({ success: true, message: "Team captain verified successfully." });
+    logger.info(`✅ Captain registration verified (${captainRegistrationId})`);
+    res.json({ success: true, message: "Captain OTP verified successfully." });
   } catch (err) {
     next(err);
   }
@@ -136,8 +130,9 @@ export const verifyTeamOTP = async (req: Request, res: Response, next: NextFunct
 export const addTeamMember = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { teamId, profileId } = req.body;
-    if (!teamId || !profileId)
+    if (!teamId || !profileId) {
       throw new AppError("Missing required fields: teamId, profileId", 400);
+    }
 
     const team = await prisma.team.findUnique({
       where: { id: teamId },
@@ -145,7 +140,7 @@ export const addTeamMember = async (req: Request, res: Response, next: NextFunct
     });
     if (!team) throw new AppError("Team not found", 404);
 
-    // ✅ Enforce max slots
+    // ✅ Enforce team slot limits
     const memberCount = team.members.length;
     if (team.event.teamMemberSlots && memberCount >= team.event.teamMemberSlots) {
       throw new AppError("Team is already full", 400);
@@ -163,7 +158,7 @@ export const addTeamMember = async (req: Request, res: Response, next: NextFunct
 
     res.status(201).json({
       success: true,
-      message: "Member added successfully",
+      message: "Member added successfully.",
       data: newMember,
     });
   } catch (err) {
