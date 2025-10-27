@@ -16,6 +16,7 @@ import registrationRoutes from "./routes/registrations";
 import { logger } from "./utils/logger";
 import { connectDatabase } from "./config/database";
 import eventRoutes from "./routes/events";
+import teamRoutes from "./routes/teams";
 
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { requestLogger } from "./middleware/requestLogger";
@@ -213,5 +214,6 @@ async function startServer() {
     process.exit(1);
   }
 }
+app.use(`/api/${API_VERSION}/teams`, teamRoutes);
 
 startServer();

@@ -52,7 +52,7 @@ interface EventFormData {
   teamMemberSlots?: number;
   photo?: File | null;
 }
-
+    
 
 /* ============================
    Component
